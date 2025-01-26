@@ -1,15 +1,15 @@
 from bang_game_engine.card import CardTypes
 from bang_game_engine.engine import IEngine
 from bang_game_engine.state.effects.effects import MissEffectNode, TryMissNode
-from bang_game_engine.state.effects.interfaces import IMissEffectFactory
+from bang_game_engine.state.effects.miss.interfaces import IMissEffectFactory
 
 
 class BangMissEffectFactory(IMissEffectFactory):
     def create(
         self,
         engine: IEngine,
-        initiating_player_index: int,
         target_player_index: int,
+        initiating_player_index: int | None = None,
     ) -> MissEffectNode:
         return TryMissNode(
             engine=engine,
@@ -23,8 +23,8 @@ class IndiansMissEffectFactory(IMissEffectFactory):
     def create(
         self,
         engine: IEngine,
-        initiating_player_index: int,
         target_player_index: int,
+        initiating_player_index: int | None = None,
     ) -> MissEffectNode:
         return TryMissNode(
             engine=engine,

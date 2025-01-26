@@ -9,7 +9,7 @@ class IMissEffectFactory(abc.ABC):
     def create(
         self,
         engine: IEngine,
-        initiating_player_index: int,
         target_player_index: int,
+        initiating_player_index: int | None = None,
     ) -> MissEffectNode:
         pass

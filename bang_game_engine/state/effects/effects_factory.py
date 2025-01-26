@@ -8,11 +8,11 @@ from bang_game_engine.state.effects.effects import (
     DuelEffectNode,
     GatlingEffectNode,
 )
-from bang_game_engine.state.effects.interfaces import IMissEffectFactory
-from bang_game_engine.state.effects.miss_factories import (
+from bang_game_engine.state.effects.miss.factories import (
     BangMissEffectFactory,
     IndiansMissEffectFactory,
 )
+from bang_game_engine.state.effects.miss.interfaces import IMissEffectFactory
 from bang_game_engine.state.interfaces import IStateNode
 
 
