@@ -92,12 +92,7 @@ class BeerEffectNode(BaseStateNode):
         self._player_index = player_index
 
     def _next(self, user_action: Action | None = None) -> None:
-        alive_players_count = 0
-        for player in self._engine.players:
-            if player.is_alive:
-                alive_players_count += 1
-
-        if alive_players_count > 2:
+        if len(self._engine.alive_players) > 2:
             self._engine.heal_player(self._player_index, 1)
 
         self._mark_as_done()
