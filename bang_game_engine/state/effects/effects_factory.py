@@ -1,11 +1,17 @@
 from bang_game_engine.card import CardTypes
 from bang_game_engine.constraint import IConstraint, ReachableWithGunConstraint
 from bang_game_engine.engine import IEngine
-from bang_game_engine.state.effects import (
+from bang_game_engine.player import IPlayer
+from bang_game_engine.state.effects.effects import (
     BangEffectNode,
     BeerEffectNode,
     DuelEffectNode,
     GatlingEffectNode,
+)
+from bang_game_engine.state.effects.interfaces import IMissEffectFactory
+from bang_game_engine.state.effects.miss_factories import (
+    BangMissEffectFactory,
+    IndiansMissEffectFactory,
 )
 from bang_game_engine.state.interfaces import IStateNode
 
@@ -72,3 +78,18 @@ class EffectsFactory:
         #     return CatBalouCardNode()
         else:
             raise ValueError(f"Unsupported card type: {card_type}")
+
+
+class AbstractMissFactory:
+    @staticmethod
+    def create(
+        card_type: CardTypes,
+        target: IPlayer,
+    ) -> IMissEffectFactory:
+        if card_type == CardTypes.BANG:
+            return BangMissEffectFactory()
+
+        if card_type == CardTypes.INDIANS:
+            return IndiansMissEffectFactory()
+
+        raise ValueError(f"Unsupported card type: {card_type}")

@@ -1,7 +1,7 @@
 from bang_game_engine.action import Action, DropCard, SkipTurn, TargetedUseCard, UseCard
 from bang_game_engine.engine import IEngine
 from bang_game_engine.state.base import BaseStateNode
-from bang_game_engine.state.effects_factory import EffectsFactory
+from bang_game_engine.state.effects.effects_factory import EffectsFactory
 from bang_game_engine.state.interfaces import IStateNode
 from bang_game_engine.state.utils import PlayerIterator
 
