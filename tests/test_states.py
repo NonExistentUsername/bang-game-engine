@@ -108,3 +108,26 @@ class TestStates:
             ValueError
         ):  # Player 0 can't reach player 2, because player 1 (or 3) is in the way
             game_cycle_node.next(TargetedUseCard(0, 2))
+
+    def test_gatling(self, engine: Engine):
+        game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
+            GameCycleNode(engine=engine)
+        )
+
+        game_cycle_node.next()
+
+        engine.players[0].hand = [
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.GATLING)
+        ]
+
+        game_cycle_node.next(UseCard(0))
+
+        assert len(engine.players[0].hand) == 0
+
+        for player_index in range(1, len(engine.players)):
+            game_cycle_node.next(SkipTurn())  # Take damage
+
+            assert (
+                engine.players[player_index].bullets
+                == engine.players[player_index].max_bullets - 1
+            )

@@ -99,3 +99,41 @@ class BeerEffectNode(BaseStateNode):
 
     def __repr__(self) -> str:
         return f"BeerCardNode(player_index={self._player_index})"
+
+
+class GatlingEffectNode(BaseStateNode):
+    def __init__(
+        self,
+        engine: IEngine,
+        initiating_player_index: int,
+        target_player_index: int = 0,
+        is_done: bool = False,
+    ):
+        super().__init__(is_done=is_done)
+
+        self._engine = engine
+        self._initiating_player_index = initiating_player_index
+        self._target_player_index = target_player_index
+
+    def _next(self, user_action: Action | None = None) -> None:
+        if self._target_player_index == self._initiating_player_index:
+            self._target_player_index += 1
+
+        # Skip dead players
+        while not self._engine.players[self._target_player_index].is_alive:
+            self._target_player_index += 1
+
+        if self._target_player_index == len(self._engine.players):
+            self._mark_as_done()
+            return
+
+        self._set_child_node(
+            BangEffectNode(
+                engine=self._engine,
+                target_player_index=self._target_player_index,
+                initiating_player_index=self._initiating_player_index,
+            )
+        )
+
+    def __repr__(self) -> str:
+        return f"GatlingEffectNode(initiating_player_index={self._initiating_player_index})"

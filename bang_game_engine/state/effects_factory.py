@@ -1,7 +1,11 @@
 from bang_game_engine.card import CardTypes
 from bang_game_engine.constraint import IConstraint, ReachableWithGunConstraint
 from bang_game_engine.engine import IEngine
-from bang_game_engine.state.effects import BangEffectNode, BeerEffectNode
+from bang_game_engine.state.effects import (
+    BangEffectNode,
+    BeerEffectNode,
+    GatlingEffectNode,
+)
 from bang_game_engine.state.interfaces import IStateNode
 
 
@@ -30,15 +34,21 @@ class EffectsFactory:
                 initiating_player_index=initiating_player_index,
             )
         elif card_type == CardTypes.BEER:
-            if not initiating_player_index:
+            if initiating_player_index is None:
                 raise ValueError("Initiating player index is required for Beer card")
 
             return BeerEffectNode(
                 engine=engine,
                 player_index=initiating_player_index,
             )
-        # elif card_type == CardTypes.GATLING:
-        #     return GatlingCardNode()
+        elif card_type == CardTypes.GATLING:
+            if initiating_player_index is None:
+                raise ValueError("Initiating player index is required for Gatling card")
+
+            return GatlingEffectNode(
+                engine=engine,
+                initiating_player_index=initiating_player_index,
+            )
         # elif card_type == CardTypes.DUEL:
         #     return DuelCardNode()
         # elif card_type == CardTypes.INDIANS:
