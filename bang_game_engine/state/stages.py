@@ -1,4 +1,4 @@
-from bang_game_engine.action import Action, DropCard, SkipTurn, UseCard
+from bang_game_engine.action import Action, DropCard, SkipTurn, TargetedUseCard, UseCard
 from bang_game_engine.engine import IEngine
 from bang_game_engine.state.base import BaseStateNode
 from bang_game_engine.state.effects_factory import EffectsFactory
@@ -87,7 +87,11 @@ class PlayCardsNode(BaseStateNode):
             effect = EffectsFactory.create(
                 engine=self._engine,
                 card_type=card.card_type,
-                target_player_index=user_action.target_player_index,
+                target_player_index=(
+                    user_action.target_player_index
+                    if isinstance(user_action, TargetedUseCard)
+                    else None
+                ),
                 initiating_player_index=self._player_index,
             )
             self._engine.discard_card(self._player_index, user_action.card_index)

@@ -1,5 +1,6 @@
 import pytest
 
+from bang_game_engine.action import TargetedUseCard
 from bang_game_engine.card import Card, CardSuits, CardTypes, CardValues
 from bang_game_engine.engine import Engine
 from bang_game_engine.state import (
@@ -31,7 +32,7 @@ class TestStates:
         )
         print(game_cycle_node)
 
-        game_cycle_node.next(UseCard(0, 1))
+        game_cycle_node.next(TargetedUseCard(0, 1))
         print(game_cycle_node)
 
         assert (
@@ -65,7 +66,7 @@ class TestStates:
         engine.players[1].hand[0] = Card(
             CardSuits.HEART, CardValues.TWO, CardTypes.BANG
         )
-        game_cycle_node.next(UseCard(0, 0))
+        game_cycle_node.next(TargetedUseCard(0, 0))
         assert len(engine.players[1].hand) == second_player_hand_size + 1
 
         engine.players[0].hand[0] = Card(

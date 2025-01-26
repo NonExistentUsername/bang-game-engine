@@ -9,7 +9,7 @@ from bang_game_engine.character import (
 )
 from bang_game_engine.deck import IDeckFactory
 from bang_game_engine.engine.engine import Engine
-from bang_game_engine.player import Player
+from bang_game_engine.player import IPlayer, Player
 from bang_game_engine.role import Role, RoleTypes
 
 
@@ -26,7 +26,7 @@ class EngineFactory:
         if shuffle_deck:
             deck.shuffle()
 
-        players: list[Player] = EngineFactory.prepare_players(
+        players: list[IPlayer] = EngineFactory.prepare_players(
             players_count, characters_factory
         )
 
@@ -41,14 +41,14 @@ class EngineFactory:
     def prepare_players(
         players_count: int,
         characters_factory: ICharacterFactory,
-    ) -> list[Player]:
+    ) -> list[IPlayer]:
         if players_count != 2:
             raise ValueError("Only 2 players are supported")
 
         sheriff_role = Role(RoleTypes.SHERIFF)
         outlaw_role = Role(RoleTypes.OUTLAW)
 
-        players = [
+        players: list[IPlayer] = [
             Player(
                 sheriff_role,
                 characters_factory.create(
