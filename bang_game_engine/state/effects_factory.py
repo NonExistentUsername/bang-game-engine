@@ -1,6 +1,6 @@
 from bang_game_engine.card import CardTypes
 from bang_game_engine.engine import IEngine
-from bang_game_engine.state.effects import BangCardNode, BeerCardNode
+from bang_game_engine.state.effects import BangEffectNode, BeerEffectNode
 from bang_game_engine.state.interfaces import IStateNode
 
 
@@ -16,7 +16,7 @@ class EffectsFactory:
             if target_player_index is None:
                 raise ValueError("Target player index is required for Bang card")
 
-            return BangCardNode(
+            return BangEffectNode(
                 engine=engine,
                 target_player_index=target_player_index,
                 initiating_player_index=initiating_player_index,
@@ -25,7 +25,7 @@ class EffectsFactory:
             if not initiating_player_index:
                 raise ValueError("Initiating player index is required for Beer card")
 
-            return BeerCardNode(
+            return BeerEffectNode(
                 engine=engine,
                 player_index=initiating_player_index,
             )

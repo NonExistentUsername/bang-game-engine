@@ -48,7 +48,7 @@ class TryMissNode(BaseStateNode):
         return f"TryMissNode(initiating_player_index={self._initiating_player_index}, player_index={self._player_index}, missed={self._is_missed})"
 
 
-class BangCardNode(BaseStateNode):
+class BangEffectNode(BaseStateNode):
     def __init__(
         self,
         engine: IEngine,
@@ -80,7 +80,7 @@ class BangCardNode(BaseStateNode):
         self._mark_as_done()
 
 
-class BeerCardNode(BaseStateNode):
+class BeerEffectNode(BaseStateNode):
     def __init__(
         self,
         engine: IEngine,
