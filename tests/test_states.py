@@ -2,7 +2,9 @@ import pytest
 
 from bang_game_engine.action import TargetedUseCard
 from bang_game_engine.card import Card, CardSuits, CardTypes, CardValues
-from bang_game_engine.engine import Engine
+from bang_game_engine.character import CharacterFactory, ICharacterFactory
+from bang_game_engine.deck import IDeckFactory
+from bang_game_engine.engine import Engine, EngineFactory
 from bang_game_engine.state import (
     DropCard,
     GameCycleNode,
@@ -11,6 +13,7 @@ from bang_game_engine.state import (
     SkipTurn,
     UseCard,
 )
+from tests.utils import BangAndMissDeckFactory
 
 
 class TestStates:
@@ -79,3 +82,29 @@ class TestStates:
             len(engine.players[0].hand) == first_player_hand_size - 1
         )  # We used missed card
         assert first_player_bullets == engine.players[0].bullets
+
+    def test_cannot_bang_if_cannot_reach(
+        self,
+        deck_factory: IDeckFactory,
+        character_factory: ICharacterFactory,
+    ):
+        engine = EngineFactory.create_new_engine(
+            players_count=4,
+            deck_factory=deck_factory,
+            characters_factory=character_factory,
+            shuffle_deck=True,
+        )
+        game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
+            GameCycleNode(engine=engine)
+        )
+
+        game_cycle_node.next()  # Start game and draw cards
+
+        engine.players[0].hand[0] = Card(
+            CardSuits.HEART, CardValues.TWO, CardTypes.BANG
+        )
+
+        with pytest.raises(
+            ValueError
+        ):  # Player 0 can't reach player 2, because player 1 (or 3) is in the way
+            game_cycle_node.next(TargetedUseCard(0, 2))

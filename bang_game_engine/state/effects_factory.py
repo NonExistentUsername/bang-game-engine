@@ -1,4 +1,5 @@
 from bang_game_engine.card import CardTypes
+from bang_game_engine.constraint import IConstraint, ReachableWithGunConstraint
 from bang_game_engine.engine import IEngine
 from bang_game_engine.state.effects import BangEffectNode, BeerEffectNode
 from bang_game_engine.state.interfaces import IStateNode
@@ -15,6 +16,13 @@ class EffectsFactory:
         if card_type == CardTypes.BANG:
             if target_player_index is None:
                 raise ValueError("Target player index is required for Bang card")
+
+            if not ReachableWithGunConstraint().check(
+                engine=engine,
+                initiating_player_index=initiating_player_index,
+                target_player_index=target_player_index,
+            ):
+                raise ValueError("Target player is not reachable")
 
             return BangEffectNode(
                 engine=engine,

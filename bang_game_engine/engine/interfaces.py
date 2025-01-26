@@ -10,6 +10,11 @@ class IEngine(abc.ABC):
     def players(self) -> list[IPlayer]:
         pass
 
+    @property
+    @abc.abstractmethod
+    def alive_players(self) -> list[IPlayer]:
+        pass
+
     @abc.abstractmethod
     def get_player(self, player_index: int) -> IPlayer:
         pass

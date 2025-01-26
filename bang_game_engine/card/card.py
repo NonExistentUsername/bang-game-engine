@@ -27,6 +27,14 @@ class ModifierCard(Card):
     pass
 
 
-class GunCard(Card):
+class GunCard(ModifierCard):
     # TODO: This is not a good way to check if a card is a gun card
-    pass
+    def __init__(
+        self,
+        suit: CardSuits,
+        value: CardValues,
+        card_type: CardTypes,
+        distance_range: int,
+    ):
+        super().__init__(suit, value, card_type)
+        self.distance_range = distance_range

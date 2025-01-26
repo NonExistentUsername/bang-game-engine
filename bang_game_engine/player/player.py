@@ -19,7 +19,7 @@ class Player(IPlayer):
         self.character = character
 
         self._hand = hand or []
-        self.gun = gun
+        self._gun = gun
         self.table = table or Table()
         self._bullets = bullets or self.max_bullets
 
@@ -32,7 +32,7 @@ class Player(IPlayer):
         return f"Player {self.role} ({self.character.character_type}) with {self._bullets} bullets"
 
     def __repr__(self) -> str:
-        return f"Player(role={self.role}, character={self.character}, hand={self.hand}, bullets={self._bullets}, gun={self.gun}, table={self.table})"
+        return f"Player(role={self.role}, character={self.character}, hand={self.hand}, bullets={self._bullets}, gun={self._gun}, table={self.table})"
 
     def heal(self, amount: int):
         self._bullets = min(self._bullets + amount, self.max_bullets)
@@ -59,3 +59,11 @@ class Player(IPlayer):
     @hand.setter
     def hand(self, hand: list[Card]):
         self._hand = hand
+
+    @property
+    def gun(self) -> GunCard | None:
+        return self._gun
+
+    @gun.setter
+    def gun(self, gun: GunCard):
+        self._gun = gun

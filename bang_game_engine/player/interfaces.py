@@ -1,6 +1,6 @@
 import abc
 
-from bang_game_engine.card import Card
+from bang_game_engine.card import Card, GunCard
 
 
 class IPlayer(abc.ABC):
@@ -35,4 +35,14 @@ class IPlayer(abc.ABC):
     @hand.setter
     @abc.abstractmethod
     def hand(self, hand: list[Card]):
+        pass
+
+    @property
+    @abc.abstractmethod
+    def gun(self) -> GunCard | None:
+        pass
+
+    @gun.setter
+    @abc.abstractmethod
+    def gun(self, gun: GunCard):
         pass

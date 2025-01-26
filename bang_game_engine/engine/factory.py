@@ -42,25 +42,59 @@ class EngineFactory:
         players_count: int,
         characters_factory: ICharacterFactory,
     ) -> list[IPlayer]:
-        if players_count != 2:
-            raise ValueError("Only 2 players are supported")
+        if players_count not in [2, 4]:
+            raise ValueError("Players count should be 2 or 4")
 
-        sheriff_role = Role(RoleTypes.SHERIFF)
-        outlaw_role = Role(RoleTypes.OUTLAW)
+        players: list[IPlayer] = []
 
-        players: list[IPlayer] = [
-            Player(
-                sheriff_role,
-                characters_factory.create(
-                    CharacterTypes.random(),
+        if players_count == 2:
+            sheriff_role = Role(RoleTypes.SHERIFF)
+            outlaw_role = Role(RoleTypes.OUTLAW)
+
+            players = [
+                Player(
+                    sheriff_role,
+                    characters_factory.create(
+                        CharacterTypes.random(),
+                    ),
                 ),
-            ),
-            Player(
-                outlaw_role,
-                characters_factory.create(
-                    CharacterTypes.random(),
+                Player(
+                    outlaw_role,
+                    characters_factory.create(
+                        CharacterTypes.random(),
+                    ),
                 ),
-            ),
-        ]
+            ]
+        else:
+            sheriff_role = Role(RoleTypes.SHERIFF)
+            outlaw_role = Role(RoleTypes.OUTLAW)
+            deputy_role = Role(RoleTypes.DEPUTY)
+
+            players = [
+                Player(
+                    sheriff_role,
+                    characters_factory.create(
+                        CharacterTypes.random(),
+                    ),
+                ),
+                Player(
+                    outlaw_role,
+                    characters_factory.create(
+                        CharacterTypes.random(),
+                    ),
+                ),
+                Player(
+                    deputy_role,
+                    characters_factory.create(
+                        CharacterTypes.random(),
+                    ),
+                ),
+                Player(
+                    deputy_role,
+                    characters_factory.create(
+                        CharacterTypes.random(),
+                    ),
+                ),
+            ]
 
         return players

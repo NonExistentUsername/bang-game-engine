@@ -17,6 +17,10 @@ class Engine(IEngine):
     def players(self) -> list[IPlayer]:
         return self._players
 
+    @property
+    def alive_players(self) -> list[IPlayer]:
+        return [player for player in self._players if player.is_alive]
+
     def get_player(self, player_index: int) -> IPlayer:
         return self._players[player_index]
 

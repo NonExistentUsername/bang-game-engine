@@ -4,7 +4,6 @@ from bang_game_engine.action import Action, SkipTurn, UseCard
 from bang_game_engine.card import CardTypes
 from bang_game_engine.engine import IEngine
 from bang_game_engine.state.base import BaseStateNode
-from bang_game_engine.state.interfaces import IStateNode
 
 
 class TryMissNode(BaseStateNode):
