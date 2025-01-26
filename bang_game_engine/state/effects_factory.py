@@ -4,6 +4,7 @@ from bang_game_engine.engine import IEngine
 from bang_game_engine.state.effects import (
     BangEffectNode,
     BeerEffectNode,
+    DuelEffectNode,
     GatlingEffectNode,
 )
 from bang_game_engine.state.interfaces import IStateNode
@@ -21,6 +22,7 @@ class EffectsFactory:
             if target_player_index is None:
                 raise ValueError("Target player index is required for Bang card")
 
+            # TODO: Refactor to be more flexible
             if not ReachableWithGunConstraint().check(
                 engine=engine,
                 initiating_player_index=initiating_player_index,
@@ -49,8 +51,17 @@ class EffectsFactory:
                 engine=engine,
                 initiating_player_index=initiating_player_index,
             )
-        # elif card_type == CardTypes.DUEL:
-        #     return DuelCardNode()
+        elif card_type == CardTypes.DUEL:
+            if initiating_player_index is None or target_player_index is None:
+                raise ValueError(
+                    "Initiating and target player indexes are required for Duel card"
+                )
+
+            return DuelEffectNode(
+                engine=engine,
+                initiating_player_index=initiating_player_index,
+                target_player_index=target_player_index,
+            )
         # elif card_type == CardTypes.INDIANS:
         #     return IndiansCardNode()
         # elif card_type == CardTypes.SALOON:

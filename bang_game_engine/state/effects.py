@@ -6,6 +6,28 @@ from bang_game_engine.engine import IEngine
 from bang_game_engine.state.base import BaseStateNode
 
 
+class DamageEffectNode(BaseStateNode):
+    def __init__(
+        self,
+        engine: IEngine,
+        player_index: int,
+        amount: int = 1,
+        is_done: bool = False,
+    ):
+        super().__init__(is_done=is_done)
+
+        self._engine = engine
+        self._player_index = player_index
+        self._amount = amount
+
+    def _next(self, user_action: Action | None = None) -> None:
+        self._engine.damage_player(self._player_index, self._amount)
+        self._mark_as_done()
+
+    def __repr__(self) -> str:
+        return f"DamageEffectNode(player_index={self._player_index}, amount={self._amount}, parent={super().__repr__()})"
+
+
 class TryMissNode(BaseStateNode):
     def __init__(
         self,
@@ -137,3 +159,55 @@ class GatlingEffectNode(BaseStateNode):
 
     def __repr__(self) -> str:
         return f"GatlingEffectNode(initiating_player_index={self._initiating_player_index})"
+
+
+class DuelEffectNode(BaseStateNode):
+    def __init__(
+        self,
+        engine: IEngine,
+        initiating_player_index: int,
+        target_player_index: int,
+        is_done: bool = False,
+    ):
+        super().__init__(is_done=is_done)
+
+        self._engine = engine
+        self._initiating_player_index = initiating_player_index
+        self._target_player_index = target_player_index
+
+        self._current_player_that_must_provide_bang = target_player_index
+
+    def _next(self, user_action: Action | None = None) -> None:
+        if isinstance(user_action, SkipTurn):
+            self._set_child_node(
+                DamageEffectNode(
+                    engine=self._engine,
+                    player_index=self._current_player_that_must_provide_bang,
+                )
+            )
+            self._mark_as_done()
+            return
+        elif isinstance(user_action, UseCard):
+            card = self._engine.players[
+                self._current_player_that_must_provide_bang
+            ].hand[user_action.card_index]
+
+            if card.card_type != CardTypes.BANG:
+                raise ValueError("Only bang card can be used in a duel")
+
+            self._engine.discard_card(
+                self._current_player_that_must_provide_bang,
+                user_action.card_index,
+            )
+
+            self._current_player_that_must_provide_bang = (
+                self._initiating_player_index
+                if self._current_player_that_must_provide_bang
+                == self._target_player_index
+                else self._target_player_index
+            )
+        else:
+            raise ValueError("User action is required")
+
+    def __repr__(self) -> str:
+        return f"DuelEffectNode(initiating_player_index={self._initiating_player_index}, target_player_index={self._target_player_index})"

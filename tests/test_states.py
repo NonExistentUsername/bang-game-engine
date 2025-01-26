@@ -131,3 +131,35 @@ class TestStates:
                 engine.players[player_index].bullets
                 == engine.players[player_index].max_bullets - 1
             )
+
+    def test_duel(self, engine: Engine):
+        game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
+            GameCycleNode(engine=engine)
+        )
+
+        game_cycle_node.next()  # Start game and draw cards
+
+        engine.players[0].hand = [
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.DUEL),
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.BANG),
+        ]
+        engine.players[1].hand = [Card(CardSuits.HEART, CardValues.TWO, CardTypes.BANG)]
+
+        game_cycle_node.next(TargetedUseCard(0, 1)), "Player 0 used duel card"
+
+        assert len(engine.players[0].hand) == 1, "Player 0 used duel card, 1 card left"
+
+        game_cycle_node.next(UseCard(0)), "Player 1 used bang card"
+
+        assert len(engine.players[0].hand) == 1, "Player 0 have same amount of cards"
+        assert len(engine.players[1].hand) == 0, "Player 1 lost all cards"
+
+        game_cycle_node.next(UseCard(0)), "Player 0 used bang card"
+
+        assert len(engine.players[0].hand) == 0, "Player 0 lost all cards"
+
+        game_cycle_node.next(SkipTurn())  # Take damage
+
+        assert (
+            engine.players[1].bullets == engine.players[1].max_bullets - 1
+        ), "Player 1 took damage"
