@@ -90,3 +90,28 @@ class TestPlayer:
         assert (
             player.bullets == character.max_bullets + 1
         ), "Sheriff should still have max bullets + 1 after healing"
+
+    def test_can_modify_hand(self):
+        character = CharacterFactory.create(CharacterTypes.SUZY_LAFAYETTE)
+        role = Role(RoleTypes.SHERIFF)
+
+        player = Player(role=role, character=character)
+
+        assert len(player.hand) == 0, "Player should have no cards in hand"
+
+        player.hand = [Card(CardSuits.HEART, CardValues.ACE, CardTypes.MUSTANG)]
+
+        assert player.hand[0].suit == CardSuits.HEART, "Card suit should be HEART"
+        assert player.hand[0].value == CardValues.ACE, "Card value should be ACE"
+        assert (
+            player.hand[0].card_type == CardTypes.MUSTANG
+        ), "Card type should be MUSTANG"
+        assert len(player.hand) == 1, "Player should have 1 card in hand"
+
+        player.hand[0] = Card(CardSuits.CLUB, CardValues.TWO, CardTypes.BANG)
+
+        assert player.hand[0].suit == CardSuits.CLUB, "Card suit should be CLUB"
+        assert player.hand[0].value == CardValues.TWO, "Card value should be TWO"
+        assert player.hand[0].card_type == CardTypes.BANG, "Card type should be BANG"
+
+        assert len(player.hand) == 1, "Player should have 1 card in hand"

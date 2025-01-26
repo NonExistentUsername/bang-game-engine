@@ -1,10 +1,11 @@
 from bang_game_engine.card import Card, GunCard
 from bang_game_engine.character import Character
+from bang_game_engine.player.interfaces import IPlayer
 from bang_game_engine.player.table import Table
 from bang_game_engine.role import Role
 
 
-class Player:
+class Player(IPlayer):
     def __init__(
         self,
         role: Role,
@@ -17,7 +18,7 @@ class Player:
         self.role = role
         self.character = character
 
-        self.hand = hand or []
+        self._hand = hand or []
         self.gun = gun
         self.table = table or Table()
         self._bullets = bullets or self.max_bullets
@@ -50,3 +51,11 @@ class Player:
     @property
     def bullets(self) -> int:
         return self._bullets
+
+    @property
+    def hand(self) -> list[Card]:
+        return self._hand
+
+    @hand.setter
+    def hand(self, hand: list[Card]):
+        self._hand = hand

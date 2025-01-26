@@ -1,9 +1,13 @@
+import logging
+
 import pytest
 
 from bang_game_engine.character import CharacterFactory, ICharacterFactory
 from bang_game_engine.deck import IDeckFactory
 from bang_game_engine.engine import Engine, EngineFactory
 from tests.utils import BangAndMissDeckFactory
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 @pytest.fixture
