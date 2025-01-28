@@ -327,3 +327,30 @@ class TestStates:
 
         assert len(engine.players[0].hand) == 1, "Player 0 have 3 cards"
         assert len(engine.players[1].hand) == 3, "Player 1 have 1 card"
+
+    def test_panic(self, engine: Engine):
+        game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
+            GameCycleNode(engine=engine)
+        )
+
+        game_cycle_node.next()  # Start game and draw cards
+
+        engine.players[0].hand = [
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.PANIC),
+        ]
+        engine.players[1].hand = [
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.BANG),
+        ]
+
+        game_cycle_node.next(TargetedUseCard(0, 1)), "Player 0 used panic card"
+
+        assert len(engine.players[0].hand) == 0, "Player 0 used panic card"
+
+        game_cycle_node.next(UseCard(0)), "Player 0 took bang card from player 1"
+
+        assert len(engine.players[0].hand) == 1, "Player 0 took bang card from player 1"
+        assert len(engine.players[1].hand) == 0, "Player 1 lost bang card"
+
+        assert (
+            engine.players[0].hand[0].card_type == CardTypes.BANG
+        ), "Player 0 took bang card from player 1"

@@ -7,6 +7,31 @@ class AlwaysTrueConstraint(IConstraint):
         return True
 
 
+class ReachableConstraint(IConstraint):
+    def check(self, engine: IEngine, **options) -> bool:
+        initiating_player_index = options.get("initiating_player_index")
+        target_player_index = options.get("target_player_index")
+
+        if initiating_player_index is None or target_player_index is None:
+            raise ValueError(
+                f"Initiating and target player indexes are required. Got: options={options}"
+            )
+
+        # TODO: Refactor this to be much more flexible
+        distance = min(
+            abs(initiating_player_index - target_player_index),
+            abs(
+                initiating_player_index
+                - target_player_index
+                + len(engine.alive_players)
+            ),
+        )
+
+        reachable_distance = 1
+
+        return distance <= reachable_distance
+
+
 class ReachableWithGunConstraint(IConstraint):
     def check(self, engine: IEngine, **options) -> bool:
         initiating_player_index = options.get("initiating_player_index")

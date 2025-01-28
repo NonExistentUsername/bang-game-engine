@@ -336,3 +336,34 @@ class GeneralStoreEffectNode(BaseStateNode):
 
     def __repr__(self) -> str:
         return f"GeneralStoreEffectNode(initiating_player_index={self._initiating_player_index})"
+
+
+class PanicEffectNode(BaseStateNode):
+    def __init__(
+        self,
+        engine: IEngine,
+        initiating_player_index: int,
+        target_player_index: int,
+        is_done: bool = False,
+    ):
+        super().__init__(is_done=is_done)
+
+        self._engine = engine
+        self._initiating_player_index = initiating_player_index
+        self._target_player_index = target_player_index
+
+    def _next(self, user_action: Action | None = None) -> None:
+        # TODO: Add ability to get cards from table and guns from other players
+
+        if not isinstance(user_action, UseCard):
+            raise ValueError("User action is required")
+
+        card = self._engine.players[self._target_player_index].hand.pop(
+            user_action.card_index
+        )
+        self._engine.players[self._initiating_player_index].hand.append(card)
+
+        self._mark_as_done()
+
+    def __repr__(self) -> str:
+        return f"PanicEffectNode(initiating_player_index={self._initiating_player_index}, target_player_index={self._target_player_index})"

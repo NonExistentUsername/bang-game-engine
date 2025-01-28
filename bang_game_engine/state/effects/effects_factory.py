@@ -1,5 +1,5 @@
 from bang_game_engine.card import CardTypes
-from bang_game_engine.constraint import IConstraint, ReachableWithGunConstraint
+from bang_game_engine.constraint import ReachableConstraint, ReachableWithGunConstraint
 from bang_game_engine.engine import IEngine
 from bang_game_engine.player import IPlayer
 from bang_game_engine.state.effects.effects import (
@@ -10,6 +10,7 @@ from bang_game_engine.state.effects.effects import (
     GatlingEffectNode,
     GeneralStoreEffectNode,
     IndiansEffectNode,
+    PanicEffectNode,
     SaloonEffectNode,
     WellsFargoEffectNode,
 )
@@ -106,7 +107,23 @@ class EffectsFactory:
                 initiating_player_index=initiating_player_index,
             )
         elif card_type == CardTypes.PANIC:
-            raise NotImplementedError("Panic card is not implemented")
+            if target_player_index is None or initiating_player_index is None:
+                raise ValueError(
+                    "Initiating and target player indexes are required for Panic card"
+                )
+
+            if not ReachableConstraint().check(
+                engine=engine,
+                initiating_player_index=initiating_player_index,
+                target_player_index=target_player_index,
+            ):
+                raise ValueError("Target player is not reachable")
+
+            return PanicEffectNode(
+                engine=engine,
+                initiating_player_index=initiating_player_index,
+                target_player_index=target_player_index,
+            )
         elif card_type == CardTypes.GENERAL_STORE:
             if initiating_player_index is None:
                 raise ValueError(
