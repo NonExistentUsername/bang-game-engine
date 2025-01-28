@@ -132,6 +132,34 @@ class TestStates:
                 == engine.players[player_index].max_bullets - 1
             )
 
+    def test_gatling_continues_from_player_who_played_card(self, engine: Engine):
+        game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
+            GameCycleNode(engine=engine)
+        )
+
+        game_cycle_node.next()
+
+        engine.players[0].hand = []
+        engine.players[1].hand = [
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.GATLING)
+        ]
+
+        game_cycle_node.next(SkipTurn())  # Skip player 0
+
+        game_cycle_node.next(SkipTurn())  # Skip discard phase
+
+        game_cycle_node.next(UseCard(0))  # Player 1 used gatling
+
+        assert (
+            len(engine.players[1].hand) == 2
+        )  # Player 1 have 2 cards, because he draw 2 cards before gatling
+
+        game_cycle_node.next(SkipTurn())  # Take damage
+
+        assert (
+            engine.players[0].bullets == engine.players[0].max_bullets - 1
+        ), "Player 0 took damage"
+
     def test_duel(self, engine: Engine):
         game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
             GameCycleNode(engine=engine)
