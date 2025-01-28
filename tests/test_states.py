@@ -32,10 +32,8 @@ class TestStates:
         engine.players[0].hand[0] = Card(
             CardSuits.HEART, CardValues.TWO, CardTypes.BANG
         )
-        print(game_cycle_node)
 
         game_cycle_node.next(TargetedUseCard(0, 1))
-        print(game_cycle_node)
 
         assert (
             len(engine.players[0].hand) == first_player_hand_size + 1
