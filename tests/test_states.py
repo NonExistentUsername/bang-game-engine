@@ -244,3 +244,23 @@ class TestStates:
         assert (
             engine.players[1].bullets == engine.players[1].max_bullets - 1
         ), "Player 1 took damage"
+
+    def test_saloon(self, engine: Engine):
+        game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
+            GameCycleNode(engine=engine)
+        )
+
+        game_cycle_node.next()  # Start game and draw cards
+
+        engine.players[0].bullets = 1
+        engine.players[1].bullets = 1
+
+        engine.players[0].hand = [
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.SALOON),
+        ]
+        engine.players[1].hand = [Card(CardSuits.HEART, CardValues.TWO, CardTypes.BANG)]
+
+        game_cycle_node.next(UseCard(0)), "Player 0 used saloon card"
+
+        assert engine.players[0].bullets == 2, "Player 0 healed"
+        assert engine.players[1].bullets == 2, "Player 1 healed"

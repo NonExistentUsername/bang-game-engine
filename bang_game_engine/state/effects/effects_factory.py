@@ -8,6 +8,7 @@ from bang_game_engine.state.effects.effects import (
     DuelEffectNode,
     GatlingEffectNode,
     IndiansEffectNode,
+    SaloonEffectNode,
 )
 from bang_game_engine.state.effects.miss.factories import (
     BangMissEffectFactory,
@@ -77,8 +78,14 @@ class EffectsFactory:
                 engine=engine,
                 initiating_player_index=initiating_player_index,
             )
-        # elif card_type == CardTypes.SALOON:
-        #     return SaloonCardNode()
+        elif card_type == CardTypes.SALOON:
+            if initiating_player_index is None:
+                raise ValueError("Initiating player index is required for Saloon card")
+
+            return SaloonEffectNode(
+                engine=engine,
+                initiating_player_index=initiating_player_index,
+            )
         # elif card_type == CardTypes.PANIC:
         #     return PanicCardNode()
         # elif card_type == CardTypes.CAT_BALOU:

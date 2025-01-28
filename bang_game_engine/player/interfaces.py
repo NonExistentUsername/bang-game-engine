@@ -27,6 +27,11 @@ class IPlayer(abc.ABC):
     def bullets(self) -> int:
         pass
 
+    @bullets.setter
+    @abc.abstractmethod
+    def bullets(self, bullets: int):
+        pass
+
     @property
     @abc.abstractmethod
     def hand(self) -> list[Card]:

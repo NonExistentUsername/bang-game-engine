@@ -52,6 +52,10 @@ class Player(IPlayer):
     def bullets(self) -> int:
         return self._bullets
 
+    @bullets.setter
+    def bullets(self, bullets: int):
+        self._bullets = bullets
+
     @property
     def hand(self) -> list[Card]:
         return self._hand

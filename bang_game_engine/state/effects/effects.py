@@ -228,3 +228,26 @@ class DuelEffectNode(BaseStateNode):
 
     def __repr__(self) -> str:
         return f"DuelEffectNode(initiating_player_index={self._initiating_player_index}, target_player_index={self._target_player_index})"
+
+
+class SaloonEffectNode(BaseStateNode):
+    def __init__(
+        self,
+        engine: IEngine,
+        initiating_player_index: int,
+        is_done: bool = False,
+    ):
+        super().__init__(is_done=is_done)
+
+        self._engine = engine
+        self._initiating_player_index = initiating_player_index
+
+    def _next(self, user_action: Action | None = None) -> None:
+        for player_index in range(len(self._engine.players)):
+            self._engine.heal_player(player_index, 1)
+        self._mark_as_done()
+
+    def __repr__(self) -> str:
+        return (
+            f"SaloonEffectNode(initiating_player_index={self._initiating_player_index})"
+        )
