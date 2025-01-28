@@ -1,7 +1,7 @@
 import pytest
 
 from bang_game_engine.action import TargetedUseCard
-from bang_game_engine.card import Card, CardSuits, CardTypes, CardValues
+from bang_game_engine.card import Card, CardSuits, CardTypes, CardValues, GunCard
 from bang_game_engine.character import CharacterFactory, ICharacterFactory
 from bang_game_engine.deck import IDeckFactory
 from bang_game_engine.engine import Engine, EngineFactory
@@ -107,6 +107,21 @@ class TestStates:
             ValueError
         ):  # Player 0 can't reach player 2, because player 1 (or 3) is in the way
             game_cycle_node.next(TargetedUseCard(0, 2))
+
+        engine.players[0].gun = GunCard(
+            CardSuits.HEART,
+            CardValues.TWO,
+            CardTypes.SCHOFIELD,
+            distance_range=2,
+        )
+
+        game_cycle_node.next(TargetedUseCard(0, 2))  # Player 0 can reach player 2
+
+        game_cycle_node.next(SkipTurn())  # Take damage
+
+        assert (
+            engine.players[2].bullets == engine.players[2].max_bullets - 1
+        ), "Player 2 took damage"
 
     def test_gatling(self, engine: Engine):
         game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
@@ -374,9 +389,6 @@ class TestStates:
 
         engine.players[0].hand = [
             Card(CardSuits.HEART, CardValues.TWO, CardTypes.PANIC),
-        ]
-        engine.players[1].hand = [
-            Card(CardSuits.HEART, CardValues.TWO, CardTypes.BANG),
         ]
 
         with pytest.raises(ValueError):
