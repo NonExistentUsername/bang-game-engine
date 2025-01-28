@@ -78,18 +78,3 @@ class EffectsFactory:
         #     return CatBalouCardNode()
         else:
             raise ValueError(f"Unsupported card type: {card_type}")
-
-
-class AbstractMissFactory:
-    @staticmethod
-    def create(
-        card_type: CardTypes,
-        target: IPlayer,
-    ) -> IMissEffectFactory:
-        if card_type == CardTypes.BANG:
-            return BangMissEffectFactory()
-
-        if card_type == CardTypes.INDIANS:
-            return IndiansMissEffectFactory()
-
-        raise ValueError(f"Unsupported card type: {card_type}")
