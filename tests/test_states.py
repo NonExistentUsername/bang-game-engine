@@ -354,3 +354,30 @@ class TestStates:
         assert (
             engine.players[0].hand[0].card_type == CardTypes.BANG
         ), "Player 0 took bang card from player 1"
+
+    def test_cannot_panic_if_cannot_reach(
+        self,
+        deck_factory: IDeckFactory,
+        character_factory: ICharacterFactory,
+    ):
+        engine = EngineFactory.create_new_engine(
+            players_count=4,
+            deck_factory=deck_factory,
+            characters_factory=character_factory,
+            shuffle_deck=True,
+        )
+        game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
+            GameCycleNode(engine=engine)
+        )
+
+        game_cycle_node.next()  # Start game and draw cards
+
+        engine.players[0].hand = [
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.PANIC),
+        ]
+        engine.players[1].hand = [
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.BANG),
+        ]
+
+        with pytest.raises(ValueError):
+            game_cycle_node.next(TargetedUseCard(0, 2)), "Player 0 can't reach player 2"
