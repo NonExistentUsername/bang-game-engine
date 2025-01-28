@@ -17,21 +17,25 @@ class BangDeckFactory(IDeckFactory):
                 suit=CardSuits.CLUB,
                 value=CardValues.TEN,
                 card_type=CardTypes.VOLCANIC,
+                distance_range=1,
             ),
             GunCard(
                 suit=CardSuits.SPADE,
                 value=CardValues.TEN,
                 card_type=CardTypes.VOLCANIC,
+                distance_range=1,
             ),
             GunCard(
                 suit=CardSuits.CLUB,
                 value=CardValues.JACK,
                 card_type=CardTypes.SCHOFIELD,
+                distance_range=2,
             ),
             GunCard(
                 suit=CardSuits.CLUB,
                 value=CardValues.QUEEN,
                 card_type=CardTypes.SCHOFIELD,
+                distance_range=2,
             ),
             ModifierCard(
                 suit=CardSuits.HEART,
