@@ -393,3 +393,15 @@ class TestStates:
 
         with pytest.raises(ValueError):
             game_cycle_node.next(TargetedUseCard(0, 2)), "Player 0 can't reach player 2"
+
+        engine.players[0].gun = GunCard(
+            CardSuits.HEART,
+            CardValues.TWO,
+            CardTypes.SCHOFIELD,
+            distance_range=2,
+        )
+
+        with pytest.raises(ValueError):
+            game_cycle_node.next(
+                TargetedUseCard(0, 2)
+            ), "Player 0 can't reach player 2 even with gun"
