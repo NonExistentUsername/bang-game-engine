@@ -322,6 +322,7 @@ class GeneralStoreEffectNode(BaseStateNode):
             return
 
         if not self._table_cards:
+            # TODO: Impement a way to see the cards on the table
             for _ in range(len(self._engine.alive_players)):
                 self._table_cards.append(self._engine.deck_pop_card())
 
