@@ -8,6 +8,7 @@ from bang_game_engine.state.effects.effects import (
     DiligenciaEffectNode,
     DuelEffectNode,
     GatlingEffectNode,
+    GeneralStoreEffectNode,
     IndiansEffectNode,
     SaloonEffectNode,
     WellsFargoEffectNode,
@@ -104,9 +105,17 @@ class EffectsFactory:
                 engine=engine,
                 initiating_player_index=initiating_player_index,
             )
-        # elif card_type == CardTypes.PANIC:
-        #     return PanicCardNode()
-        # elif card_type == CardTypes.CAT_BALOU:
-        #     return CatBalouCardNode()
+        elif card_type == CardTypes.PANIC:
+            raise NotImplementedError("Panic card is not implemented")
+        elif card_type == CardTypes.GENERAL_STORE:
+            if initiating_player_index is None:
+                raise ValueError(
+                    "Initiating player index is required for General Store card"
+                )
+
+            return GeneralStoreEffectNode(
+                engine=engine,
+                initiating_player_index=initiating_player_index,
+            )
         else:
             raise ValueError(f"Unsupported card type: {card_type}")

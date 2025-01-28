@@ -293,3 +293,37 @@ class TestStates:
         game_cycle_node.next(UseCard(0)), "Player 0 used deligencia card"
 
         assert len(engine.players[0].hand) == 3, "Player 0 draw 3 cards"
+
+    def test_general_store(self, engine: Engine):
+        game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
+            GameCycleNode(engine=engine)
+        )
+
+        game_cycle_node.next()  # Start game and draw cards
+
+        engine.players[0].hand = [
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.GENERAL_STORE),
+        ]
+        engine.players[1].hand = []
+
+        game_cycle_node.next(UseCard(0)), "Player 0 used general store card"
+
+        assert (
+            len(engine.players[0].hand) == 0
+        ), "Player 0 have 0 cards, because he used general store"
+
+        game_cycle_node.next(UseCard(1)), "Player 0 took second card from general store"
+
+        assert len(engine.players[0].hand) == 1, "Player 0 have 3 cards"
+
+        game_cycle_node.next(UseCard(0)), "Player 1 took first card from general store"
+
+        assert len(engine.players[0].hand) == 1, "Player 0 have 3 cards"
+        assert len(engine.players[1].hand) == 1, "Player 1 have 1 card"
+
+        game_cycle_node.next(SkipTurn())  # Finish playing cards
+
+        game_cycle_node.next(SkipTurn())  # Skip discard phase
+
+        assert len(engine.players[0].hand) == 1, "Player 0 have 3 cards"
+        assert len(engine.players[1].hand) == 3, "Player 1 have 1 card"
