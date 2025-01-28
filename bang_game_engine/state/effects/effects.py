@@ -130,6 +130,53 @@ class GatlingEffectNode(BaseStateNode):
         return f"GatlingEffectNode(initiating_player_index={self._initiating_player_index})"
 
 
+class IndiansEffectNode(BaseStateNode):
+    def __init__(
+        self,
+        engine: IEngine,
+        initiating_player_index: int,
+        is_done: bool = False,
+    ):
+        super().__init__(is_done=is_done)
+
+        self._engine = engine
+        self._initiating_player_index = initiating_player_index
+        self._target_player_index_delta = 1
+
+    def _get_current_player_index(self) -> int:
+        return (self._initiating_player_index + self._target_player_index_delta) % len(
+            self._engine.players
+        )
+
+    def _next(self, user_action: Action | None = None) -> None:
+        if self._target_player_index_delta == len(self._engine.players):
+            self._mark_as_done()
+            return
+
+        # Skip dead players
+        while not self._engine.players[self._get_current_player_index()].is_alive:
+            self._target_player_index_delta += 1
+
+        if self._target_player_index_delta == len(self._engine.players):
+            self._mark_as_done()
+            return
+
+        self._set_child_node(
+            DamageEffectNode(
+                engine=self._engine,
+                target_player_index=self._get_current_player_index(),
+                initiating_player_index=self._initiating_player_index,
+                miss_node_factory=AbstractMissFactory.create(
+                    card_type=CardTypes.INDIANS
+                ),
+                amount=1,
+            )
+        )
+
+    def __repr__(self) -> str:
+        return f"GatlingEffectNode(initiating_player_index={self._initiating_player_index})"
+
+
 class DuelEffectNode(BaseStateNode):
     def __init__(
         self,

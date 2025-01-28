@@ -160,6 +160,57 @@ class TestStates:
             engine.players[0].bullets == engine.players[0].max_bullets - 1
         ), "Player 0 took damage"
 
+    def test_indians(self, engine: Engine):
+        game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
+            GameCycleNode(engine=engine)
+        )
+
+        game_cycle_node.next()
+
+        engine.players[0].hand = [
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.INDIANS)
+        ]
+
+        game_cycle_node.next(UseCard(0))
+
+        assert len(engine.players[0].hand) == 0
+
+        for player_index in range(1, len(engine.players)):
+            game_cycle_node.next(SkipTurn())  # Take damage
+
+            assert (
+                engine.players[player_index].bullets
+                == engine.players[player_index].max_bullets - 1
+            )
+
+    def test_indians_continues_from_player_who_played_card(self, engine: Engine):
+        game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
+            GameCycleNode(engine=engine)
+        )
+
+        game_cycle_node.next()
+
+        engine.players[0].hand = []
+        engine.players[1].hand = [
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.INDIANS)
+        ]
+
+        game_cycle_node.next(SkipTurn())  # Skip player 0
+
+        game_cycle_node.next(SkipTurn())  # Skip discard phase
+
+        game_cycle_node.next(UseCard(0))  # Player 1 used indians
+
+        assert (
+            len(engine.players[1].hand) == 2
+        )  # Player 1 have 2 cards, because he draw 2 cards before indians
+
+        game_cycle_node.next(SkipTurn())  # Take damage
+
+        assert (
+            engine.players[0].bullets == engine.players[0].max_bullets - 1
+        ), "Player 0 took damage"
+
     def test_duel(self, engine: Engine):
         game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
             GameCycleNode(engine=engine)
