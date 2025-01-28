@@ -271,3 +271,23 @@ class DiligenciaEffectNode(BaseStateNode):
 
     def __repr__(self) -> str:
         return f"DiligenciaEffectNode(initiating_player_index={self._initiating_player_index})"
+
+
+class WellsFargoEffectNode(BaseStateNode):
+    def __init__(
+        self,
+        engine: IEngine,
+        initiating_player_index: int,
+        is_done: bool = False,
+    ):
+        super().__init__(is_done=is_done)
+
+        self._engine = engine
+        self._initiating_player_index = initiating_player_index
+
+    def _next(self, user_action: Action | None = None) -> None:
+        self._engine.draw_cards(self._initiating_player_index, 3)
+        self._mark_as_done()
+
+    def __repr__(self) -> str:
+        return f"WellsFargoEffectNode(initiating_player_index={self._initiating_player_index})"

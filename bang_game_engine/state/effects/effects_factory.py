@@ -10,6 +10,7 @@ from bang_game_engine.state.effects.effects import (
     GatlingEffectNode,
     IndiansEffectNode,
     SaloonEffectNode,
+    WellsFargoEffectNode,
 )
 from bang_game_engine.state.effects.miss.interfaces import IMissEffectFactory
 from bang_game_engine.state.interfaces import IStateNode
@@ -90,6 +91,16 @@ class EffectsFactory:
                 )
 
             return DiligenciaEffectNode(
+                engine=engine,
+                initiating_player_index=initiating_player_index,
+            )
+        elif card_type == CardTypes.WELLS_FARGO:
+            if initiating_player_index is None:
+                raise ValueError(
+                    "Initiating player index is required for Wells Fargo card"
+                )
+
+            return WellsFargoEffectNode(
                 engine=engine,
                 initiating_player_index=initiating_player_index,
             )

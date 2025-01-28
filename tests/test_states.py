@@ -278,3 +278,18 @@ class TestStates:
         game_cycle_node.next(UseCard(0)), "Player 0 used deligencia card"
 
         assert len(engine.players[0].hand) == 2, "Player 0 draw 2 cards"
+
+    def test_wells_fargo(self, engine: Engine):
+        game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
+            GameCycleNode(engine=engine)
+        )
+
+        game_cycle_node.next()  # Start game and draw cards
+
+        engine.players[0].hand = [
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.WELLS_FARGO),
+        ]
+
+        game_cycle_node.next(UseCard(0)), "Player 0 used deligencia card"
+
+        assert len(engine.players[0].hand) == 3, "Player 0 draw 3 cards"
