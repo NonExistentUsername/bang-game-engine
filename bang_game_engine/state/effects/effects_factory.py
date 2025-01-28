@@ -5,14 +5,11 @@ from bang_game_engine.player import IPlayer
 from bang_game_engine.state.effects.effects import (
     BangEffectNode,
     BeerEffectNode,
+    DiligenciaEffectNode,
     DuelEffectNode,
     GatlingEffectNode,
     IndiansEffectNode,
     SaloonEffectNode,
-)
-from bang_game_engine.state.effects.miss.factories import (
-    BangMissEffectFactory,
-    IndiansMissEffectFactory,
 )
 from bang_game_engine.state.effects.miss.interfaces import IMissEffectFactory
 from bang_game_engine.state.interfaces import IStateNode
@@ -83,6 +80,16 @@ class EffectsFactory:
                 raise ValueError("Initiating player index is required for Saloon card")
 
             return SaloonEffectNode(
+                engine=engine,
+                initiating_player_index=initiating_player_index,
+            )
+        elif card_type == CardTypes.DILIGENCIA:
+            if initiating_player_index is None:
+                raise ValueError(
+                    "Initiating player index is required for Diligencia card"
+                )
+
+            return DiligenciaEffectNode(
                 engine=engine,
                 initiating_player_index=initiating_player_index,
             )

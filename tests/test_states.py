@@ -13,7 +13,6 @@ from bang_game_engine.state import (
     SkipTurn,
     UseCard,
 )
-from tests.utils import BangAndMissDeckFactory
 
 
 class TestStates:
@@ -264,3 +263,18 @@ class TestStates:
 
         assert engine.players[0].bullets == 2, "Player 0 healed"
         assert engine.players[1].bullets == 2, "Player 1 healed"
+
+    def test_deligencia(self, engine: Engine):
+        game_cycle_node: PushFullNextNodeDecorator = PushFullNextNodeDecorator(
+            GameCycleNode(engine=engine)
+        )
+
+        game_cycle_node.next()  # Start game and draw cards
+
+        engine.players[0].hand = [
+            Card(CardSuits.HEART, CardValues.TWO, CardTypes.DILIGENCIA),
+        ]
+
+        game_cycle_node.next(UseCard(0)), "Player 0 used deligencia card"
+
+        assert len(engine.players[0].hand) == 2, "Player 0 draw 2 cards"
