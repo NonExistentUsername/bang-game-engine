@@ -9,7 +9,7 @@ class CardTypes(enum.StrEnum):
     CAT_BALOU = "cat_balou"
     INDIANS = "indians"
     WELLS_FARGO = "wells_fargo"
-    SHOP = "shop"
+    GENERAL_STORE = "general_store"
     SALOON = "saloon"
     DILIGENCIA = "diligencia"
     BEER = "beer"

@@ -105,12 +105,12 @@ class BangDeckFactory(IDeckFactory):
             Card(
                 suit=CardSuits.HEART,
                 value=CardValues.TWO,
-                card_type=CardTypes.SHOP,
+                card_type=CardTypes.GENERAL_STORE,
             ),
             Card(
                 suit=CardSuits.HEART,
                 value=CardValues.TWO,
-                card_type=CardTypes.SHOP,
+                card_type=CardTypes.GENERAL_STORE,
             ),
             Card(
                 suit=CardSuits.HEART,
