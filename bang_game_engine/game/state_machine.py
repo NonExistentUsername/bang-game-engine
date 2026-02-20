@@ -452,6 +452,18 @@ class GameStateMachine:
         if command.target_player_id is not None:
             self._validate_target(player, command.target_player_id, card)
 
+        # Pre-validate effect handler BEFORE removing card from hand
+        if card.color == CardColor.BROWN and self._state.effect_registry.has_handler(card.card_type):
+            handler = self._state.effect_registry.get_handler(card.card_type)
+            context = EffectContext(
+                source_player_id=command.player_id,
+                card=card,
+                target_player_id=command.target_player_id,
+            )
+            valid, reason = handler.validate(context, self._state)
+            if not valid:
+                raise CardNotPlayableError(reason)
+
         # Remove card from hand
         player.remove_from_hand(command.card_id)
 
@@ -470,13 +482,18 @@ class GameStateMachine:
 
         # Handle card based on color
         if card.color == CardColor.BLUE:
-            # Persistent card -> play to table
-            displaced = player.play_to_table(card)
-            if displaced:
-                self._state.deck.discard(displaced)
-            # Volcanic grants unlimited bangs immediately
-            if card.card_type == "volcanic":
-                turn.has_unlimited_bangs = True
+            # Jail targets another player's table
+            if card.card_type == "jail" and command.target_player_id is not None:
+                target_player = self._state.get_player(command.target_player_id)
+                target_player.play_to_table(card)
+            else:
+                # Persistent card -> play to source's table
+                displaced = player.play_to_table(card)
+                if displaced:
+                    self._state.deck.discard(displaced)
+                # Volcanic grants unlimited bangs immediately
+                if card.card_type == "volcanic":
+                    turn.has_unlimited_bangs = True
         elif card.color == CardColor.GREEN:
             # Green card -> play to table with turn marker
             card.turn_played = turn.turn_number
@@ -1277,7 +1294,8 @@ class GameStateMachine:
             source = self._state.get_player(source_player_id)
             if source.hand_size > 0:
                 import random as _rng
-                stolen_card = source._hand[_rng.randint(0, len(source._hand) - 1)]
+                source_hand = source.hand
+                stolen_card = source_hand[_rng.randint(0, len(source_hand) - 1)]
                 source.remove_from_hand(stolen_card.id)
                 player.add_to_hand(stolen_card)
                 ability_event = AbilityActivated(

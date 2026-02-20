@@ -103,6 +103,8 @@ class SaloonEffectHandler:
     card_type = "saloon"
 
     def validate(self, context: EffectContext, game: Any) -> tuple[bool, str]:
+        if game.alive_count <= 2:
+            return False, "Saloon has no effect with only 2 players remaining"
         return True, ""
 
     def begin(self, context: EffectContext, game: Any) -> EffectOutcome:
@@ -180,11 +182,12 @@ class PanicEffectHandler:
         if not all_cards:
             return EffectOutcome(state=EffectState.COMPLETE)
 
-        # For simplicity, steal first card from hand, or first table card
+        # For simplicity, steal a random card from hand, or first table card
         if target.hand:
             import random as _rng
 
-            card = target._hand[_rng.randint(0, len(target._hand) - 1)]
+            hand = target.hand
+            card = hand[_rng.randint(0, len(hand) - 1)]
             target.remove_from_hand(card.id)
             source.add_to_hand(card)
         elif target.table_cards:
@@ -217,11 +220,12 @@ class CatBalouEffectHandler:
         if not all_cards:
             return EffectOutcome(state=EffectState.COMPLETE)
 
-        # Discard random card from hand, or first table card
+        # Discard a random card from hand, or first table card
         if target.hand:
             import random as _rng
 
-            card = target._hand[_rng.randint(0, len(target._hand) - 1)]
+            hand = target.hand
+            card = hand[_rng.randint(0, len(hand) - 1)]
             target.remove_from_hand(card.id)
             game.deck.discard(card)
         elif target.table_cards:

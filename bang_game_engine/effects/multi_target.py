@@ -129,13 +129,11 @@ class GeneralStoreEffectHandler:
 
         # Store in turn state for the state machine to manage
         if game.current_turn is not None:
+            from bang_game_engine.game.phase import Phase
+
             game.current_turn.general_store_cards = revealed
             game.current_turn.general_store_pickers = pick_order
-            game.current_turn.current_phase = (
-                __import__(
-                    "bang_game_engine.game.phase", fromlist=["Phase"]
-                ).Phase.GENERAL_STORE_PICK
-            )
+            game.current_turn.current_phase = Phase.GENERAL_STORE_PICK
 
         return EffectOutcome(state=EffectState.COMPLETE)
 

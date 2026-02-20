@@ -923,3 +923,91 @@ class TestGeneralStore:
             m.handle_command(GeneralStorePickCommand(player_id=picker, card_id=card.id))
 
         assert m.current_phase == Phase.PLAY_PHASE
+
+
+# ── Jail Placement ──────────────────────────────────────────────────
+
+
+class TestJailPlacement:
+    """Jail card should be placed on the TARGET's table, not the source's."""
+
+    def test_jail_placed_on_target_table(self):
+        """Jail card appears on target player's table after being played."""
+        m, pids = setup_game([Role.SHERIFF, Role.OUTLAW, Role.OUTLAW, Role.RENEGADE])
+        m.start_game()
+        sheriff = pids[0]
+
+        skip_to_next_turn(m, sheriff)
+        outlaw = m.active_player_id
+        other_outlaw = pids[2]
+
+        jail = make_card("jail", color=CardColor.BLUE)
+        give_card_to_player(m, outlaw, jail)
+
+        m.handle_command(
+            PlayCardCommand(player_id=outlaw, card_id=jail.id, target_player_id=other_outlaw)
+        )
+
+        outlaw_player = m.game_state.get_player(outlaw)
+        target_player = m.game_state.get_player(other_outlaw)
+        assert not outlaw_player.has_card_type_on_table("jail")
+        assert target_player.has_card_type_on_table("jail")
+
+
+# ── Card Validation Before Removal ──────────────────────────────────
+
+
+class TestCardValidationOrder:
+    """Card should remain in hand if effect validation fails."""
+
+    def test_beer_not_lost_when_blocked(self):
+        """Beer card stays in hand when blocked by 2-player restriction."""
+        m, pids = setup_game([Role.SHERIFF, Role.OUTLAW, Role.OUTLAW, Role.RENEGADE])
+        m.start_game()
+
+        # Kill players 2 and 3
+        for pid in pids[2:]:
+            p = m.game_state.get_player(pid)
+            p.take_damage(p.hp)
+            p.eliminate()
+            m.game_state.seating.mark_eliminated(pid)
+
+        sheriff = pids[0]
+        sheriff_player = m.game_state.get_player(sheriff)
+        sheriff_player.take_damage(1)
+        m.game_state.collect_events()
+
+        beer = make_card("beer")
+        give_card_to_player(m, sheriff, beer)
+        hand_before = sheriff_player.hand_size
+
+        with pytest.raises(CardNotPlayableError, match="2 players"):
+            m.handle_command(PlayCardCommand(player_id=sheriff, card_id=beer.id))
+
+        # Card should still be in hand
+        assert sheriff_player.hand_size == hand_before
+        assert sheriff_player.get_card_from_hand(beer.id) is not None
+
+
+# ── Saloon 2-Player Restriction ─────────────────────────────────────
+
+
+class TestSaloon2Players:
+    """Saloon should also be blocked with only 2 players, like Beer."""
+
+    def test_saloon_blocked_with_2_players(self):
+        m, pids = setup_game([Role.SHERIFF, Role.OUTLAW, Role.OUTLAW, Role.RENEGADE])
+        m.start_game()
+
+        for pid in pids[2:]:
+            p = m.game_state.get_player(pid)
+            p.take_damage(p.hp)
+            p.eliminate()
+            m.game_state.seating.mark_eliminated(pid)
+
+        sheriff = pids[0]
+        saloon = make_card("saloon")
+        give_card_to_player(m, sheriff, saloon)
+
+        with pytest.raises(CardNotPlayableError, match="2 players"):
+            m.handle_command(PlayCardCommand(player_id=sheriff, card_id=saloon.id))
