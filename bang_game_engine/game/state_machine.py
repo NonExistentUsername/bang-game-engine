@@ -521,8 +521,10 @@ class GameStateMachine:
         card: Card,
     ) -> None:
         """Validate target is valid for the given card."""
+        # Cat Balou and Panic! can target yourself (e.g., to discard your own Dynamite)
         if target_player_id == source_player.id:
-            raise InvalidActionError("Cannot target yourself with this card")
+            if card.card_type not in ("cat_balou", "panic"):
+                raise InvalidActionError("Cannot target yourself with this card")
 
         target = self._state.get_player(target_player_id)
         if not target.is_alive:
@@ -572,20 +574,40 @@ class GameStateMachine:
             raise CardNotPlayableError(reason)
 
         # For Bang!: do Barrel check first (before asking for Missed!)
+        barrel_credit = 0
         if card.card_type == "bang" and target_player_id is not None:
             barrel_events = self._do_barrel_check(target_player_id, source_player_id)
             events.extend(barrel_events)
-            # If barrel saved them, effect is done
-            if any(
+            barrel_saved = any(
                 isinstance(e, DrawCheckPerformed) and e.check_type == "barrel" and e.passed
                 for e in barrel_events
-            ):
-                return events
+            )
+            if barrel_saved:
+                # Check if source needs more than 1 Missed! (Slab the Killer)
+                source = self._state.get_player(source_player_id)
+                missed_needed = 1
+                for ability in source.character.get_abilities_for_timing(
+                    AbilityTiming.ON_MISSED_REQUIRED
+                ):
+                    ctx = AbilityContext(player_id=source.id)
+                    if ability.can_activate(ctx):
+                        result = ability.activate(ctx)
+                        if result.modified_value is not None:
+                            missed_needed = result.modified_value
+                if missed_needed <= 1:
+                    return events  # Barrel fully negates regular Bang!
+                barrel_credit = 1  # Barrel counts as 1 Missed! toward Slab requirement
 
         # Begin effect
         outcome = handler.begin(context, self._state)
         effect_events = self._process_outcome(outcome, handler, context)
         events.extend(effect_events)
+
+        # Apply barrel credit for Slab the Killer (barrel counts as 1 Missed!)
+        if barrel_credit > 0 and not self._state.effect_stack.is_empty:
+            entry = self._state.effect_stack.peek()
+            if entry is not None and entry.handler.card_type == "bang":
+                entry.missed_played += barrel_credit
 
         return events
 

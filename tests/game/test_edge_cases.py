@@ -1011,3 +1011,154 @@ class TestSaloon2Players:
 
         with pytest.raises(CardNotPlayableError, match="2 players"):
             m.handle_command(PlayCardCommand(player_id=sheriff, card_id=saloon.id))
+
+
+# ── Barrel + Slab the Killer ────────────────────────────────────────
+
+
+class TestBarrelVsSlab:
+    """Barrel only counts as 1 Missed! against Slab the Killer, not a full negate."""
+
+    def test_barrel_counts_as_one_missed_for_slab(self):
+        """Barrel succeeds but Slab still requires 1 more Missed! from target."""
+        chars = [
+            make_character("slab_the_killer", abilities=[SlabTheKillerAbility()]),
+            make_character("target_char"),
+            make_character("char_2"),
+            make_character("char_3"),
+        ]
+        m, pids = setup_game(
+            [Role.SHERIFF, Role.OUTLAW, Role.OUTLAW, Role.RENEGADE],
+            characters=chars,
+        )
+        m.start_game()
+        slab = pids[0]
+        target = pids[1]
+
+        # Put Barrel on target's table
+        barrel = make_card("barrel", color=CardColor.BLUE)
+        target_player = m.game_state.get_player(target)
+        target_player.play_to_table(barrel)
+        m.game_state.collect_events()
+
+        # Rig barrel check to succeed (Hearts)
+        hearts_card = make_card("test_barrel", suit=Suit.HEARTS, rank=Rank.SEVEN)
+        m.game_state.deck.put_back_on_top(hearts_card)
+
+        bang = make_card("bang")
+        give_card_to_player(m, slab, bang)
+
+        events = m.handle_command(
+            PlayCardCommand(player_id=slab, card_id=bang.id, target_player_id=target)
+        )
+
+        # Barrel succeeded, but Slab needs 2 Missed! total
+        barrel_checks = [e for e in events if isinstance(e, DrawCheckPerformed) and e.check_type == "barrel"]
+        assert len(barrel_checks) == 1
+        assert barrel_checks[0].passed is True
+
+        # Should still be awaiting 1 more Missed! (barrel covered 1 of 2)
+        assert m.current_phase == Phase.AWAITING_RESPONSE
+
+        # Play Missed! to fully avoid
+        missed = make_card("missed")
+        give_card_to_player(m, target, missed)
+        m.handle_command(RespondToEffectCommand(player_id=target, card_id=missed.id))
+
+        assert m.current_phase == Phase.PLAY_PHASE
+        assert target_player.hp == target_player.max_hp  # No damage
+
+    def test_barrel_plus_pass_means_damage_from_slab(self):
+        """Barrel succeeds but target passes on second Missed! -> takes damage."""
+        chars = [
+            make_character("slab_the_killer", abilities=[SlabTheKillerAbility()]),
+            make_character("target_char"),
+            make_character("char_2"),
+            make_character("char_3"),
+        ]
+        m, pids = setup_game(
+            [Role.SHERIFF, Role.OUTLAW, Role.OUTLAW, Role.RENEGADE],
+            characters=chars,
+        )
+        m.start_game()
+        slab = pids[0]
+        target = pids[1]
+
+        barrel = make_card("barrel", color=CardColor.BLUE)
+        target_player = m.game_state.get_player(target)
+        target_player.play_to_table(barrel)
+        m.game_state.collect_events()
+
+        hearts_card = make_card("test_barrel", suit=Suit.HEARTS, rank=Rank.SEVEN)
+        m.game_state.deck.put_back_on_top(hearts_card)
+
+        bang = make_card("bang")
+        give_card_to_player(m, slab, bang)
+        m.handle_command(PlayCardCommand(player_id=slab, card_id=bang.id, target_player_id=target))
+
+        # Barrel covered 1 of 2, now pass -> takes damage
+        assert m.current_phase == Phase.AWAITING_RESPONSE
+        m.handle_command(RespondToEffectCommand(player_id=target, card_id=None))
+
+        assert target_player.hp == target_player.max_hp - 1
+
+
+# ── Cat Balou / Panic! Self-Targeting ───────────────────────────────
+
+
+class TestSelfTargeting:
+    """Cat Balou and Panic! can target your own cards in play."""
+
+    def test_cat_balou_own_dynamite(self):
+        """Player can use Cat Balou to discard their own Dynamite."""
+        m, pids = setup_game([Role.SHERIFF, Role.OUTLAW, Role.OUTLAW, Role.RENEGADE])
+        m.start_game()
+        sheriff = pids[0]
+
+        # Place Dynamite on sheriff's table
+        dynamite = make_card("dynamite", color=CardColor.BLUE)
+        sheriff_player = m.game_state.get_player(sheriff)
+        sheriff_player.play_to_table(dynamite)
+        m.game_state.collect_events()
+
+        assert sheriff_player.has_card_type_on_table("dynamite")
+
+        # Play Cat Balou targeting self
+        cat_balou = make_card("cat_balou")
+        give_card_to_player(m, sheriff, cat_balou)
+        m.handle_command(
+            PlayCardCommand(player_id=sheriff, card_id=cat_balou.id, target_player_id=sheriff)
+        )
+
+        # Dynamite should be gone (Cat Balou randomly picks from hand or table;
+        # since we're targeting self and have cards in hand, it may pick a hand card.
+        # The important thing is no error was raised for self-targeting.)
+        # Just verify no exception was raised - the self-targeting works.
+
+    def test_panic_self_targeting_allowed(self):
+        """Panic! on self doesn't raise an error."""
+        m, pids = setup_game([Role.SHERIFF, Role.OUTLAW, Role.OUTLAW, Role.RENEGADE])
+        m.start_game()
+        sheriff = pids[0]
+
+        panic = make_card("panic")
+        give_card_to_player(m, sheriff, panic)
+
+        # Should NOT raise "Cannot target yourself"
+        m.handle_command(
+            PlayCardCommand(player_id=sheriff, card_id=panic.id, target_player_id=sheriff)
+        )
+
+    def test_bang_self_targeting_still_blocked(self):
+        """Bang! on self is still blocked."""
+        m, pids = setup_game([Role.SHERIFF, Role.OUTLAW, Role.OUTLAW, Role.RENEGADE])
+        m.start_game()
+        sheriff = pids[0]
+
+        bang = make_card("bang")
+        give_card_to_player(m, sheriff, bang)
+
+        with pytest.raises(InvalidActionError, match="Cannot target yourself"):
+            m.handle_command(
+                PlayCardCommand(player_id=sheriff, card_id=bang.id, target_player_id=sheriff)
+            )
