@@ -18,6 +18,7 @@ from bang_game_engine.effects.effect import (
     ResponseWindow,
 )
 from bang_game_engine.effects.events import (
+    BeerSavingAttempt,
     DrawCheckPerformed,
     DynamiteExploded,
     DynamitePassed,
@@ -26,11 +27,14 @@ from bang_game_engine.effects.events import (
 )
 from bang_game_engine.game.commands import (
     DiscardCardCommand,
+    DrawPhaseChoiceCommand,
     EndPhaseCommand,
     GeneralStorePickCommand,
+    KitCarlsonChoiceCommand,
     PlayBeerWhenDyingCommand,
     PlayCardCommand,
     RespondToEffectCommand,
+    SidKetchumHealCommand,
 )
 from bang_game_engine.game.events import (
     CardPlayed,
@@ -43,7 +47,13 @@ from bang_game_engine.game.events import (
 from bang_game_engine.game.game_state import GameState
 from bang_game_engine.game.phase import Phase
 from bang_game_engine.game.turn import TurnState
-from bang_game_engine.players.events import PlayerAtZeroHP, PlayerDamaged, PlayerEliminated
+from bang_game_engine.players.ability import AbilityContext, AbilityTiming
+from bang_game_engine.players.events import (
+    AbilityActivated,
+    PlayerAtZeroHP,
+    PlayerDamaged,
+    PlayerEliminated,
+)
 from bang_game_engine.players.player import WEAPON_TYPES
 from bang_game_engine.players.role import Role
 from bang_game_engine.shared.commands import Command
@@ -59,6 +69,15 @@ from bang_game_engine.shared.events import DomainEvent
 from bang_game_engine.shared.types import PlayerId
 
 
+# Valid response card types for each response expectation
+_RESPONSE_CARD_TYPES: dict[str, set[str]] = {
+    "missed": {"missed"},
+    "bang": {"bang"},
+    "beer": {"beer"},
+    "pass": set(),  # Pass means no card
+}
+
+
 class GameStateMachine:
     """
     Central orchestrator for game flow.
@@ -72,6 +91,9 @@ class GameStateMachine:
         self._state = game_state
         self._draw_check = DrawCheckService()
         self._all_events: list[DomainEvent] = []
+        # Beer saving state: when a player hits 0 HP, we pause to let them play Beer
+        self._dying_player_id: PlayerId | None = None
+        self._dying_killer_id: PlayerId | None = None
 
     @property
     def game_state(self) -> GameState:
@@ -92,6 +114,10 @@ class GameStateMachine:
     @property
     def all_events(self) -> list[DomainEvent]:
         return list(self._all_events)
+
+    @property
+    def is_awaiting_beer_save(self) -> bool:
+        return self._dying_player_id is not None
 
     def _emit(self, event: DomainEvent) -> None:
         self._all_events.append(event)
@@ -115,7 +141,7 @@ class GameStateMachine:
         if sheriff_id is None:
             raise DomainError("No sheriff found among players")
 
-        # Deal initial cards: each player gets cards = their HP
+        # Deal initial cards: each player gets cards = their max HP
         for pid in self._state.seating.alive_players_in_order():
             player = self._state.get_player(pid)
             for _ in range(player.max_hp):
@@ -142,7 +168,15 @@ class GameStateMachine:
 
         events: list[DomainEvent] = []
 
-        if isinstance(command, PlayCardCommand):
+        # If we're waiting for beer saving, only allow beer or pass
+        if self._dying_player_id is not None:
+            if isinstance(command, PlayBeerWhenDyingCommand):
+                events = self._handle_beer_when_dying(command)
+            else:
+                raise InvalidActionError(
+                    "A player is dying - only Beer can be played right now"
+                )
+        elif isinstance(command, PlayCardCommand):
             events = self._handle_play_card(command)
         elif isinstance(command, RespondToEffectCommand):
             events = self._handle_respond_to_effect(command)
@@ -154,6 +188,12 @@ class GameStateMachine:
             events = self._handle_general_store_pick(command)
         elif isinstance(command, PlayBeerWhenDyingCommand):
             events = self._handle_beer_when_dying(command)
+        elif isinstance(command, DrawPhaseChoiceCommand):
+            events = self._handle_draw_phase_choice(command)
+        elif isinstance(command, KitCarlsonChoiceCommand):
+            events = self._handle_kit_carlson_choice(command)
+        elif isinstance(command, SidKetchumHealCommand):
+            events = self._handle_sid_ketchum_heal(command)
         else:
             raise InvalidActionError(f"Unknown command type: {type(command)}")
 
@@ -233,9 +273,15 @@ class GameStateMachine:
                     # Explodes! 3 damage
                     player.remove_from_table(dynamite_card.id)
                     self._state.deck.discard(dynamite_card)
+
+                    # Bart Cassidy: draw card per damage taken
                     dmg_events = player.take_damage(3)
                     self._emit_all(dmg_events)
                     events.extend(dmg_events)
+
+                    # Bart Cassidy draws cards
+                    bart_events = self._trigger_on_take_damage(player_id, 3, None)
+                    events.extend(bart_events)
 
                     explode_event = DynamiteExploded(
                         player_id=player_id, damage=3
@@ -243,14 +289,28 @@ class GameStateMachine:
                     self._emit(explode_event)
                     events.append(explode_event)
 
-                    # Check for death
+                    # Check for death (with beer saving)
                     death_events = self._check_elimination(player_id, None)
                     events.extend(death_events)
 
                     if not player.is_alive:
+                        # Player died from dynamite - end their turn, move to next
+                        if self._state.is_over:
+                            return events
+                        end_event = TurnEnded(
+                            turn_number=turn.turn_number,
+                            active_player_id=player_id,
+                        )
+                        self._emit(end_event)
+                        events.append(end_event)
+                        next_pid = self._state.seating.next_alive_after(
+                            self._find_living_neighbor(player_id)
+                        ) if not self._state.seating.is_alive(player_id) else self._state.seating.next_alive_after(player_id)
+                        # Don't start next turn here; the caller (_start_turn) will handle it
+                        # Actually we need to handle this: player dies during their own turn start
                         return events
                 else:
-                    # Pass dynamite to next player
+                    # Pass dynamite to next alive player
                     player.remove_from_table(dynamite_card.id)
                     next_pid = self._state.seating.next_alive_after(player_id)
                     next_player = self._state.get_player(next_pid)
@@ -261,6 +321,10 @@ class GameStateMachine:
                     )
                     self._emit(pass_event)
                     events.append(pass_event)
+
+        # If player died from dynamite, don't continue
+        if not player.is_alive:
+            return events
 
         # 2. Jail check
         if player.has_card_type_on_table("jail"):
@@ -293,7 +357,7 @@ class GameStateMachine:
                     self._emit(escape_event)
                     events.append(escape_event)
                 else:
-                    # Jailed - skip to discard phase
+                    # Jailed - skip to discard phase (skip draw and play)
                     kept_event = JailKept(player_id=player_id)
                     self._emit(kept_event)
                     events.append(kept_event)
@@ -318,6 +382,13 @@ class GameStateMachine:
 
         return events
 
+    def _find_living_neighbor(self, dead_player_id: PlayerId) -> PlayerId:
+        """Find an alive player to anchor next_alive_after when the given player is dead."""
+        alive = self._state.seating.alive_players_in_order()
+        if alive:
+            return alive[0]
+        raise DomainError("No alive players")
+
     def _do_default_draw(self, player_id: PlayerId) -> list[DomainEvent]:
         """Default draw phase: draw 2 cards."""
         events: list[DomainEvent] = []
@@ -329,6 +400,11 @@ class GameStateMachine:
             card = self._state.deck.draw()
             player.add_to_hand(card)
             turn.cards_drawn += 1
+
+        # Suzy Lafayette: if hand was empty and now has cards, this is handled elsewhere
+        # Black Jack: show 2nd card drawn, if red suit draw extra
+        bj_events = self._trigger_black_jack_draw(player_id)
+        events.extend(bj_events)
 
         # Move to play phase
         turn.current_phase = Phase.PLAY_PHASE
@@ -361,6 +437,9 @@ class GameStateMachine:
         card = player.get_card_from_hand(command.card_id)
         if card is None:
             raise InvalidActionError("Card not in hand")
+
+        # Calamity Janet: Bang! can be played as Missed! and vice versa
+        # (handled in response validation, not during play)
 
         # Check turn rules
         allowed, reason = self._state.turn_rule_engine.can_play_card(
@@ -395,7 +474,7 @@ class GameStateMachine:
             displaced = player.play_to_table(card)
             if displaced:
                 self._state.deck.discard(displaced)
-            # Check if weapon grants unlimited bangs
+            # Volcanic grants unlimited bangs immediately
             if card.card_type == "volcanic":
                 turn.has_unlimited_bangs = True
         elif card.color == CardColor.GREEN:
@@ -411,6 +490,10 @@ class GameStateMachine:
                     card, command.player_id, command.target_player_id
                 )
                 events.extend(effect_events)
+
+        # Suzy Lafayette: draw when hand becomes empty
+        suzy_events = self._trigger_suzy_lafayette(command.player_id)
+        events.extend(suzy_events)
 
         return events
 
@@ -471,12 +554,77 @@ class GameStateMachine:
         if not valid:
             raise CardNotPlayableError(reason)
 
+        # For Bang!: do Barrel check first (before asking for Missed!)
+        if card.card_type == "bang" and target_player_id is not None:
+            barrel_events = self._do_barrel_check(target_player_id, source_player_id)
+            events.extend(barrel_events)
+            # If barrel saved them, effect is done
+            if any(
+                isinstance(e, DrawCheckPerformed) and e.check_type == "barrel" and e.passed
+                for e in barrel_events
+            ):
+                return events
+
         # Begin effect
         outcome = handler.begin(context, self._state)
         effect_events = self._process_outcome(outcome, handler, context)
         events.extend(effect_events)
 
         return events
+
+    def _do_barrel_check(
+        self, target_player_id: PlayerId, source_player_id: PlayerId
+    ) -> list[DomainEvent]:
+        """Check Barrel (blue card or Jourdonnais ability) before Missed! window."""
+        events: list[DomainEvent] = []
+        target = self._state.get_player(target_player_id)
+
+        # Jourdonnais has an innate Barrel
+        has_jourdonnais = target.character.has_ability("jourdonnais")
+        has_barrel_card = target.has_card_type_on_table("barrel")
+
+        # Check Jourdonnais innate Barrel first
+        if has_jourdonnais:
+            result = self._draw_check.perform_check(
+                self._state.deck, BarrelCondition()
+            )
+            check_event = DrawCheckPerformed(
+                player_id=target_player_id,
+                check_type="barrel",
+                card_face=result.card_drawn.face,
+                passed=result.passed,
+            )
+            self._emit(check_event)
+            events.append(check_event)
+
+            if result.passed:
+                ability_event = AbilityActivated(
+                    player_id=target_player_id,
+                    ability_name="jourdonnais",
+                    character_type=target.character.character_type,
+                )
+                self._emit(ability_event)
+                events.append(ability_event)
+                return events  # Saved by innate Barrel
+
+        # Check Barrel card on table
+        if has_barrel_card:
+            result = self._draw_check.perform_check(
+                self._state.deck, BarrelCondition()
+            )
+            check_event = DrawCheckPerformed(
+                player_id=target_player_id,
+                check_type="barrel",
+                card_face=result.card_drawn.face,
+                passed=result.passed,
+            )
+            self._emit(check_event)
+            events.append(check_event)
+
+            if result.passed:
+                return events  # Saved by Barrel card
+
+        return events  # Not saved, proceed to Missed! window
 
     def _process_outcome(
         self,
@@ -502,6 +650,22 @@ class GameStateMachine:
                     entry.current_target_id = (
                         outcome.response_window.responding_player_id
                     )
+
+            # Slab the Killer: track how many Missed! needed
+            if handler.card_type == "bang":
+                source = self._state.get_player(context.source_player_id)
+                missed_needed = 1
+                for ability in source.character.get_abilities_for_timing(
+                    AbilityTiming.ON_MISSED_REQUIRED
+                ):
+                    ctx = AbilityContext(player_id=source.id)
+                    if ability.can_activate(ctx):
+                        result = ability.activate(ctx)
+                        if result.modified_value is not None:
+                            missed_needed = result.modified_value
+                entry.missed_count_needed = missed_needed
+                entry.missed_played = 0
+
             self._state.effect_stack.push(entry)
 
             # Switch to awaiting response
@@ -509,13 +673,8 @@ class GameStateMachine:
             self._state.current_turn.current_phase = Phase.AWAITING_RESPONSE
 
         elif outcome.state == EffectState.COMPLETE:
-            # Check for deaths
-            for event in outcome.events:
-                if isinstance(event, PlayerAtZeroHP):
-                    death_events = self._check_elimination(
-                        event.player_id, context.source_player_id
-                    )
-                    events.extend(death_events)
+            # Check for deaths from this effect
+            self._process_deaths_from_events(outcome.events, context.source_player_id, events)
 
         return events
 
@@ -535,14 +694,51 @@ class GameStateMachine:
         if command.player_id != entry.response_window.responding_player_id:
             raise NotYourTurnError("It is not your turn to respond")
 
-        # If player is playing a card to respond, validate and remove from hand
+        # Validate response card type
+        response_card = None
         if command.card_id is not None:
             player = self._state.get_player(command.player_id)
-            card = player.get_card_from_hand(command.card_id)
-            if card is None:
+            response_card = player.get_card_from_hand(command.card_id)
+            if response_card is None:
                 raise InvalidActionError("Card not in hand")
+
+            # Validate the card type matches what's expected
+            valid_types = set(entry.response_window.valid_response_types)
+            valid_types.discard("pass")  # "pass" is for no-card response
+
+            actual_type = response_card.card_type
+
+            # Calamity Janet: can use Bang! as Missed! and vice versa
+            effective_type = actual_type
+            if self._is_calamity_janet(command.player_id):
+                if actual_type == "bang" and "missed" in valid_types:
+                    effective_type = "missed"
+                elif actual_type == "missed" and "bang" in valid_types:
+                    effective_type = "bang"
+
+            if effective_type not in valid_types and actual_type not in valid_types:
+                raise InvalidActionError(
+                    f"Cannot respond with {actual_type}; expected one of: {valid_types}"
+                )
+
             player.remove_from_hand(command.card_id)
-            self._state.deck.discard(card)
+            self._state.deck.discard(response_card)
+
+        # Handle Slab the Killer: need multiple Missed!
+        if (
+            entry.handler.card_type == "bang"
+            and command.card_id is not None
+            and entry.missed_count_needed > 1
+        ):
+            entry.missed_played += 1
+            if entry.missed_played < entry.missed_count_needed:
+                # Need more Missed! cards - stay awaiting
+                entry.response_window = ResponseWindow(
+                    responding_player_id=command.player_id,
+                    valid_response_types=["missed", "pass"],
+                    prompt=f"Play another Missed! ({entry.missed_played}/{entry.missed_count_needed}) or take 1 damage",
+                )
+                return []
 
         # Handle the response
         outcome = entry.handler.handle_response(
@@ -558,21 +754,30 @@ class GameStateMachine:
         if outcome.state == EffectState.COMPLETE:
             self._state.effect_stack.pop()
 
-            # Check for deaths
+            # Trigger damage-related character abilities
             for event in outcome.events:
-                if isinstance(event, PlayerAtZeroHP):
-                    death_events = self._check_elimination(
-                        event.player_id, entry.context.source_player_id
+                if isinstance(event, PlayerDamaged):
+                    dmg_ability_events = self._trigger_on_take_damage(
+                        event.player_id, event.amount, event.source_player_id
                     )
-                    events.extend(death_events)
+                    events.extend(dmg_ability_events)
 
-            # If stack is empty, return to play phase
-            if self._state.effect_stack.is_empty:
-                assert self._state.current_turn is not None
-                self._state.current_turn.current_phase = Phase.PLAY_PHASE
+            # Check deaths from this resolution
+            self._process_deaths_from_events(
+                outcome.events, entry.context.source_player_id, events
+            )
+
+            # Multi-target: advance to next target if there are remaining targets
+            if entry.remaining_targets and not self._state.is_over:
+                advance_events = self._advance_multi_target(entry)
+                events.extend(advance_events)
+            elif self._state.effect_stack.is_empty:
+                # All effects resolved, return to play phase
+                if self._state.current_turn is not None and not self._state.is_over:
+                    self._state.current_turn.current_phase = Phase.PLAY_PHASE
 
         elif outcome.state == EffectState.AWAITING_RESPONSE:
-            # Update entry
+            # Update entry (Duel alternating, etc.)
             entry.response_window = outcome.response_window
             entry.state = EffectState.AWAITING_RESPONSE
             if outcome.remaining_targets is not None:
@@ -582,7 +787,99 @@ class GameStateMachine:
                     outcome.response_window.responding_player_id
                 )
 
+        # Suzy Lafayette: draw when hand becomes empty (after discarding response card)
+        if command.card_id is not None:
+            suzy_events = self._trigger_suzy_lafayette(command.player_id)
+            events.extend(suzy_events)
+
         return events
+
+    def _advance_multi_target(
+        self, completed_entry: EffectStackEntry
+    ) -> list[DomainEvent]:
+        """Advance a multi-target effect to the next target."""
+        events: list[DomainEvent] = []
+        remaining = completed_entry.remaining_targets
+
+        # Filter out dead targets
+        remaining = [
+            t for t in remaining
+            if self._state.seating.is_alive(t)
+        ]
+
+        if not remaining:
+            # All targets handled, return to play phase
+            if self._state.effect_stack.is_empty and self._state.current_turn is not None:
+                self._state.current_turn.current_phase = Phase.PLAY_PHASE
+            return events
+
+        next_target = remaining[0]
+        rest = remaining[1:]
+
+        # Determine response type based on the effect
+        card_type = completed_entry.handler.card_type
+        if card_type == "indians":
+            valid_responses = ["bang", "pass"]
+            prompt = "Play a Bang! or lose 1 HP (Indians!)"
+        elif card_type == "gatling":
+            valid_responses = ["missed", "pass"]
+            prompt = "Play a Missed! or take 1 damage (Gatling)"
+        else:
+            valid_responses = ["pass"]
+            prompt = "Respond to effect"
+
+        # For Gatling: do Barrel check for each target
+        if card_type == "gatling":
+            barrel_events = self._do_barrel_check(
+                next_target, completed_entry.context.source_player_id
+            )
+            events.extend(barrel_events)
+            if any(
+                isinstance(e, DrawCheckPerformed) and e.check_type == "barrel" and e.passed
+                for e in barrel_events
+            ):
+                # Barrel saved this target, advance to next
+                completed_entry.remaining_targets = rest
+                if rest:
+                    return events + self._advance_multi_target(completed_entry)
+                else:
+                    if self._state.effect_stack.is_empty and self._state.current_turn is not None:
+                        self._state.current_turn.current_phase = Phase.PLAY_PHASE
+                    return events
+
+        # Push new entry for next target
+        new_entry = EffectStackEntry(
+            handler=completed_entry.handler,
+            context=completed_entry.context,
+            state=EffectState.AWAITING_RESPONSE,
+            response_window=ResponseWindow(
+                responding_player_id=next_target,
+                valid_response_types=valid_responses,
+                prompt=prompt,
+            ),
+            remaining_targets=rest,
+            current_target_id=next_target,
+        )
+        self._state.effect_stack.push(new_entry)
+
+        if self._state.current_turn is not None:
+            self._state.current_turn.current_phase = Phase.AWAITING_RESPONSE
+
+        return events
+
+    def _process_deaths_from_events(
+        self,
+        outcome_events: list[DomainEvent],
+        killer_player_id: PlayerId | None,
+        result_events: list[DomainEvent],
+    ) -> None:
+        """Check for PlayerAtZeroHP events and trigger elimination."""
+        for event in outcome_events:
+            if isinstance(event, PlayerAtZeroHP):
+                death_events = self._check_elimination(
+                    event.player_id, killer_player_id
+                )
+                result_events.extend(death_events)
 
     # --- Phase Transitions ---
 
@@ -705,11 +1002,15 @@ class GameStateMachine:
         """Handle out-of-turn Beer when a player is dying."""
         player = self._state.get_player(command.player_id)
 
-        if player.hp > 0:
+        # Must be the dying player
+        if self._dying_player_id is not None:
+            if command.player_id != self._dying_player_id:
+                raise InvalidActionError("Only the dying player can play Beer")
+        elif player.hp > 0:
             raise InvalidActionError("You are not dying")
 
         if self._state.alive_count <= 2:
-            raise InvalidActionError("Beer has no effect with 2 players")
+            raise InvalidActionError("Beer has no effect with only 2 players")
 
         card = player.get_card_from_hand(command.card_id)
         if card is None or card.card_type != "beer":
@@ -722,6 +1023,92 @@ class GameStateMachine:
         events: list[DomainEvent] = []
         self._emit_all(heal_events)
         events.extend(heal_events)
+
+        save_event = BeerSavingAttempt(
+            player_id=command.player_id, success=player.hp > 0
+        )
+        self._emit(save_event)
+        events.append(save_event)
+
+        # If player is still at 0 HP, they need more Beer or will die
+        if player.hp > 0:
+            # Saved! Clear dying state
+            self._dying_player_id = None
+            self._dying_killer_id = None
+
+        return events
+
+    def confirm_no_beer(self, player_id: PlayerId) -> list[DomainEvent]:
+        """Player confirms they have no Beer to play (or chooses not to).
+        This completes the elimination."""
+        if self._dying_player_id != player_id:
+            raise InvalidActionError("This player is not dying")
+
+        killer_id = self._dying_killer_id
+        self._dying_player_id = None
+        self._dying_killer_id = None
+
+        return self._complete_elimination(player_id, killer_id)
+
+    # --- Character Ability Commands ---
+
+    def _handle_draw_phase_choice(
+        self, command: DrawPhaseChoiceCommand
+    ) -> list[DomainEvent]:
+        """Handle Jesse Jones / Pedro Ramirez draw phase choice."""
+        turn = self._state.current_turn
+        if turn is None or command.player_id != turn.active_player_id:
+            raise NotYourTurnError("It is not your turn")
+        # Stub for expansion - basic draw phase handled automatically
+        raise InvalidActionError("Draw phase choice not applicable for this character")
+
+    def _handle_kit_carlson_choice(
+        self, command: KitCarlsonChoiceCommand
+    ) -> list[DomainEvent]:
+        """Handle Kit Carlson choosing which card to put back."""
+        turn = self._state.current_turn
+        if turn is None or command.player_id != turn.active_player_id:
+            raise NotYourTurnError("It is not your turn")
+        raise InvalidActionError("Kit Carlson choice not applicable")
+
+    def _handle_sid_ketchum_heal(
+        self, command: SidKetchumHealCommand
+    ) -> list[DomainEvent]:
+        """Sid Ketchum: discard 2 cards to heal 1 HP. Can be used any time during your turn."""
+        turn = self._state.current_turn
+        if turn is None:
+            raise DomainError("No turn in progress")
+
+        if command.player_id != turn.active_player_id:
+            raise NotYourTurnError("It is not your turn")
+
+        player = self._state.get_player(command.player_id)
+        if not player.character.has_ability("sid_ketchum"):
+            raise InvalidActionError("Only Sid Ketchum can use this ability")
+
+        if player.hp >= player.max_hp:
+            raise InvalidActionError("Already at full HP")
+
+        # Discard 2 cards
+        card1 = player.remove_from_hand(command.card_id_1)
+        card2 = player.remove_from_hand(command.card_id_2)
+        self._state.deck.discard(card1)
+        self._state.deck.discard(card2)
+
+        # Heal 1
+        heal_events = player.heal(1)
+        events: list[DomainEvent] = []
+        self._emit_all(heal_events)
+        events.extend(heal_events)
+
+        ability_event = AbilityActivated(
+            player_id=command.player_id,
+            ability_name="sid_ketchum",
+            character_type=player.character.character_type,
+        )
+        self._emit(ability_event)
+        events.append(ability_event)
+
         return events
 
     # --- Turn End ---
@@ -730,6 +1117,9 @@ class GameStateMachine:
         """End the current turn and start the next."""
         turn = self._state.current_turn
         assert turn is not None
+
+        if self._state.is_over:
+            return []
 
         events: list[DomainEvent] = []
 
@@ -758,12 +1148,40 @@ class GameStateMachine:
         dying_player_id: PlayerId,
         killer_player_id: PlayerId | None,
     ) -> list[DomainEvent]:
-        """Check if player at 0 HP should be eliminated (no Beer saving here for now)."""
+        """
+        Check if a player at 0 HP should be eliminated.
+
+        Beer saving: if the player has Beer cards in hand and there are
+        more than 2 players, they get a chance to play Beer before dying.
+        """
         events: list[DomainEvent] = []
         player = self._state.get_player(dying_player_id)
 
         if player.hp > 0 or not player.is_alive:
             return events
+
+        # Beer saving window: check if player has any Beer and >2 players alive
+        has_beer = player.has_card_type_in_hand("beer")
+        if has_beer and self._state.alive_count > 2:
+            # Set dying state - wait for PlayBeerWhenDyingCommand or confirm_no_beer
+            self._dying_player_id = dying_player_id
+            self._dying_killer_id = killer_player_id
+            return events  # Pause elimination, wait for Beer
+
+        # No Beer available or only 2 players - eliminate immediately
+        return self._complete_elimination(dying_player_id, killer_player_id)
+
+    def _complete_elimination(
+        self,
+        dying_player_id: PlayerId,
+        killer_player_id: PlayerId | None,
+    ) -> list[DomainEvent]:
+        """Complete the elimination of a player (after Beer saving window)."""
+        events: list[DomainEvent] = []
+        player = self._state.get_player(dying_player_id)
+
+        if not player.is_alive:
+            return events  # Already eliminated
 
         # Eliminate the player
         elim_events = player.eliminate()
@@ -773,6 +1191,13 @@ class GameStateMachine:
         # Update seating
         self._state.seating.mark_eliminated(dying_player_id)
 
+        # Vulture Sam: takes all cards from eliminated players
+        vulture_events = self._trigger_vulture_sam(dying_player_id)
+        events.extend(vulture_events)
+
+        # If Vulture Sam took the cards, skip normal discard
+        vulture_took = len(vulture_events) > 0
+
         # Bounty: killer killed an Outlaw -> draw 3
         if player.role == Role.OUTLAW and killer_player_id is not None:
             killer = self._state.get_player(killer_player_id)
@@ -781,7 +1206,7 @@ class GameStateMachine:
                     card = self._state.deck.draw()
                     killer.add_to_hand(card)
 
-        # Penalty: Sheriff killed a Deputy -> discard all
+        # Penalty: Sheriff killed a Deputy -> Sheriff discards ALL hand + table
         if player.role == Role.DEPUTY and killer_player_id is not None:
             killer = self._state.get_player(killer_player_id)
             if killer.role == Role.SHERIFF:
@@ -789,10 +1214,11 @@ class GameStateMachine:
                 for card in discarded:
                     self._state.deck.discard(card)
 
-        # Discard dead player's cards
-        dead_cards = player.discard_all()
-        for card in dead_cards:
-            self._state.deck.discard(card)
+        # Discard dead player's cards (if Vulture Sam didn't take them)
+        if not vulture_took:
+            dead_cards = player.discard_all()
+            for card in dead_cards:
+                self._state.deck.discard(card)
 
         # Check win conditions
         result = self._state.win_evaluator.evaluate(
@@ -809,5 +1235,130 @@ class GameStateMachine:
             )
             self._emit(game_end)
             events.append(game_end)
+
+        return events
+
+    # --- Character Ability Triggers ---
+
+    def _is_calamity_janet(self, player_id: PlayerId) -> bool:
+        """Check if player is Calamity Janet (can swap Bang!/Missed!)."""
+        player = self._state.get_player(player_id)
+        return player.character.has_ability("calamity_janet")
+
+    def _trigger_on_take_damage(
+        self,
+        player_id: PlayerId,
+        amount: int,
+        source_player_id: PlayerId | None,
+    ) -> list[DomainEvent]:
+        """Trigger character abilities that fire on taking damage."""
+        events: list[DomainEvent] = []
+        player = self._state.get_player(player_id)
+
+        # Bart Cassidy: draw a card for each damage taken
+        if player.character.has_ability("bart_cassidy") and player.is_alive:
+            for _ in range(amount):
+                card = self._state.deck.draw()
+                player.add_to_hand(card)
+            ability_event = AbilityActivated(
+                player_id=player_id,
+                ability_name="bart_cassidy",
+                character_type=player.character.character_type,
+            )
+            self._emit(ability_event)
+            events.append(ability_event)
+
+        # El Gringo: draw a card from the attacker's hand
+        if (
+            player.character.has_ability("el_gringo")
+            and player.is_alive
+            and source_player_id is not None
+        ):
+            source = self._state.get_player(source_player_id)
+            if source.hand_size > 0:
+                import random as _rng
+                stolen_card = source._hand[_rng.randint(0, len(source._hand) - 1)]
+                source.remove_from_hand(stolen_card.id)
+                player.add_to_hand(stolen_card)
+                ability_event = AbilityActivated(
+                    player_id=player_id,
+                    ability_name="el_gringo",
+                    character_type=player.character.character_type,
+                )
+                self._emit(ability_event)
+                events.append(ability_event)
+
+        return events
+
+    def _trigger_suzy_lafayette(self, player_id: PlayerId) -> list[DomainEvent]:
+        """Suzy Lafayette: draws a card when her hand becomes empty."""
+        events: list[DomainEvent] = []
+        player = self._state.get_player(player_id)
+
+        if (
+            player.character.has_ability("suzy_lafayette")
+            and player.is_alive
+            and player.hand_size == 0
+        ):
+            card = self._state.deck.draw()
+            player.add_to_hand(card)
+            ability_event = AbilityActivated(
+                player_id=player_id,
+                ability_name="suzy_lafayette",
+                character_type=player.character.character_type,
+            )
+            self._emit(ability_event)
+            events.append(ability_event)
+
+        return events
+
+    def _trigger_vulture_sam(self, eliminated_player_id: PlayerId) -> list[DomainEvent]:
+        """Vulture Sam: takes all cards from eliminated players."""
+        events: list[DomainEvent] = []
+        eliminated = self._state.get_player(eliminated_player_id)
+
+        # Find Vulture Sam among alive players
+        for pid in self._state.seating.alive_players_in_order():
+            player = self._state.get_player(pid)
+            if player.character.has_ability("vulture_sam") and pid != eliminated_player_id:
+                # Take all cards from eliminated player
+                all_cards = eliminated.discard_all()
+                for card in all_cards:
+                    player.add_to_hand(card)
+
+                if all_cards:
+                    ability_event = AbilityActivated(
+                        player_id=pid,
+                        ability_name="vulture_sam",
+                        character_type=player.character.character_type,
+                    )
+                    self._emit(ability_event)
+                    events.append(ability_event)
+                break  # Only one Vulture Sam
+
+        return events
+
+    def _trigger_black_jack_draw(self, player_id: PlayerId) -> list[DomainEvent]:
+        """Black Jack: show 2nd drawn card; if red suit, draw an extra card."""
+        events: list[DomainEvent] = []
+        player = self._state.get_player(player_id)
+
+        if not player.character.has_ability("black_jack"):
+            return events
+
+        # The 2nd card drawn (last card added to hand) is revealed
+        if player.hand_size >= 1:
+            second_card = player.hand[-1]  # Most recently drawn
+            if second_card.face.is_hearts_or_diamonds():
+                # Red suit: draw an extra card
+                extra = self._state.deck.draw()
+                player.add_to_hand(extra)
+                ability_event = AbilityActivated(
+                    player_id=player_id,
+                    ability_name="black_jack",
+                    character_type=player.character.character_type,
+                )
+                self._emit(ability_event)
+                events.append(ability_event)
 
         return events
